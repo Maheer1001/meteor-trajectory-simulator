@@ -1,5 +1,9 @@
 # Meteor Trajectory Simulator
 
+![Demo: configuring a meteor, falling through space and the atmosphere, then the impact map, blast radii and distance graph](media/demo.gif)
+
+*Visuals are an early version; a graphics overhaul is planned.*
+
 A Unity simulation of a meteor falling towards Earth. You set the meteor's properties and starting position, then watch it fall through space, enter the atmosphere, and either burn up or hit the ground. If it hits, the simulator estimates the crater size and blast radii and shows where on Earth it landed.
 
 > My A-Level Computer Science NEA (AQA), built in Unity with C#.
@@ -26,6 +30,12 @@ A Unity simulation of a meteor falling towards Earth. You set the meteor's prope
 - **Pause / play** saves the simulation state on a stack and restores it.
 - **Collision map:** mouse wheel to zoom, arrow keys / WASD to pan.
 - The main menu has Start, Continue, Restart, Exit, and a More Information screen that links to background reading (RK4, drag coefficients, overpressure levels).
+
+## Screenshots
+
+| Variable input | Atmosphere stage | Impact map |
+| --- | --- | --- |
+| ![Variable input screen](media/screenshot-input.png) | ![Atmosphere stage](media/screenshot-atmosphere.png) | ![Impact map with blast radius rings](media/screenshot-impact.png) |
 
 ## Open & run
 
