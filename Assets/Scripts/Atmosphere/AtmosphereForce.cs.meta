@@ -1,0 +1,20 @@
+fileFormatVersion: 2
+guid: 733b97b509ead7a449596505079df4b3
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - meteorForceScript: {fileID: 1820129817057734482, guid: ba9f665a2ee321841a1c0b3a96edfc83, type: 3}
+  - Timestamp: {instanceID: 0}
+  - DistanceRemaining: {instanceID: 0}
+  - MeteorVelocity: {instanceID: 0}
+  - MeteorAcceleration: {instanceID: 0}
+  - MeteorMass: {instanceID: 0}
+  - MeteorRadius: {instanceID: 0}
+  - slider: {instanceID: 0}
+  - slider2: {instanceID: 0}
+  executionOrder: -1200
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
