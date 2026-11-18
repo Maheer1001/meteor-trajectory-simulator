@@ -1,6 +1,7 @@
 // Import necessary namespaces
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -192,6 +193,55 @@ public class CoordinateCalculator : MonoBehaviour
     }
 }
 
+// Shape of Assets/StreamingAssets/secrets.json (see secrets.example.json)
+[Serializable]
+class Secrets
+{
+    public string geocodeMapsCoApiKey;
+}
+
+// Loads the geocode.maps.co API key without it being stored in the code
+static class ApiKeyLoader
+{
+    const string EnvironmentVariable = "GEOCODE_MAPS_CO_API_KEY";
+    const string Placeholder = "YOUR_GEOCODE_MAPS_CO_API_KEY";
+
+    // Returns the API key, or null if none has been set up
+    public static string GetGeocodeApiKey()
+    {
+        // 1. Environment variable
+        string key = Environment.GetEnvironmentVariable(EnvironmentVariable);
+
+        // 2. Fall back to Assets/StreamingAssets/secrets.json (gitignored)
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            string path = Path.Combine(Application.streamingAssetsPath, "secrets.json");
+            try
+            {
+                if (File.Exists(path))
+                {
+                    Secrets secrets = JsonUtility.FromJson<Secrets>(File.ReadAllText(path));
+                    if (secrets != null)
+                    {
+                        key = secrets.geocodeMapsCoApiKey;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Could not read " + path + ": " + e.Message);
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(key) || key.Trim() == Placeholder)
+        {
+            return null;
+        }
+
+        return key.Trim();
+    }
+}
+
 // Class for reverse geocoding
 class ReverseGeocoding
 {
@@ -199,15 +249,35 @@ class ReverseGeocoding
     // Asynchronous method to reverse geocode given latitude and longitude
     public static async Task<string> ReverseGeocode(double latitude, double longitude, TMP_Text JsonParseText)
     {
+        JsonParse = JsonParseText;
+
+        // Without an API key the rest of the simulation still works, just without a place name
+        string apiKey = ApiKeyLoader.GetGeocodeApiKey();
+        if (apiKey == null)
+        {
+            Debug.LogWarning("No geocode.maps.co API key found. Set GEOCODE_MAPS_CO_API_KEY or create Assets/StreamingAssets/secrets.json (see the README).");
+            JsonParse.text = "Location lookup unavailable - add an API key";
+            return null;
+        }
+
         using (HttpClient client = new HttpClient())
         {
             // Construct the API URL with latitude, longitude, and API key
-            string apiUrl = $"https://geocode.maps.co/reverse?lat={latitude}&lon={longitude}&api_key=YOUR_GEOCODE_MAPS_CO_API_KEY";
+            string apiUrl = $"https://geocode.maps.co/reverse?lat={latitude}&lon={longitude}&api_key={Uri.EscapeDataString(apiKey)}";
 
             // Send a GET request to the API
-            HttpResponseMessage response = await client.GetAsync(apiUrl);
-
-            JsonParse = JsonParseText;
+            HttpResponseMessage response;
+            try
+            {
+                response = await client.GetAsync(apiUrl);
+            }
+            catch (Exception e)
+            {
+                // No internet connection or the site could not be reached
+                Debug.LogWarning("Reverse geocoding request failed: " + e.Message);
+                JsonParse.text = "Location lookup unavailable - check your internet connection";
+                return null;
+            }
 
             // Check if the response is successful
             if (response.IsSuccessStatusCode)
@@ -266,6 +336,16 @@ class ReverseGeocoding
             {
                 // Log error information if the request is not successful
                 Debug.Log($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+
+                // 401/403 means the key was missing or rejected
+                if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    JsonParse.text = "Location lookup unavailable - API key was rejected";
+                }
+                else
+                {
+                    JsonParse.text = "Location lookup unavailable";
+                }
                 return null;
             }
         }

@@ -47,3 +47,7 @@ crashlytics-build.properties
 /packages.config
 /app.config
 /Packages/Mpir.NET.*/
+
+# Local API keys (copy Assets/StreamingAssets/secrets.example.json to secrets.json)
+/[Aa]ssets/[Ss]treamingAssets/secrets.json
+/[Aa]ssets/[Ss]treamingAssets/secrets.json.meta
