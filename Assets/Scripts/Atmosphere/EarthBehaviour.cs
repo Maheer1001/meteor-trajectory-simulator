@@ -1,18 +1,12 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
+// Spins the Earth model about its axis at the sidereal rate (one turn every 23 h 56 min 4 s of real time).
 public class EarthBehaviour : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
-    {
-        transform.Rotate(0f, 0f * Time.deltaTime, 0f, Space.Self);
-    }
+    private const float DegreesPerSecond = 360f / 86164.0905f;
 
-    // Update is called once per frame
     void Update()
     {
-        transform.Rotate (0f, 1/14400f*Time.deltaTime, 0f, Space.Self);
+        transform.Rotate(0f, DegreesPerSecond * Time.deltaTime, 0f, Space.Self);
     }
 }

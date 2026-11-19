@@ -1,14 +1,17 @@
-using System.Collections;
+using System;
 using System.Collections.Generic;
+using MTS.Core;
 using UnityEngine;
 using UnityEngine.UI;
 
+// Plots distance travelled against time for the finished run.
 public class Window_Graph : MonoBehaviour
 {
+    // Upper limit on plotted points, so the graph stays as light as the old minute-by-minute version.
+    private const int MaxPoints = 200;
 
     [SerializeField] private Sprite circleSprite;
     private RectTransform GraphContainer;
-    private List<double> final = new List<double>();
 
     private void Awake()
     {
@@ -17,21 +20,13 @@ public class Window_Graph : MonoBehaviour
 
     private void Start()
     {
-        // Determine the list of values based on the elapsed time
-        if (Meteor_Force.time >= 126000)
+        SimulationResult result = SimulationSession.Instance.Result;
+        if (result == null || result.Series == null)
         {
-            final = Meteor_Force.ThirtyMin;
+            return;
         }
-        else if (Meteor_Force.time >= 12000)
-        {
-            final = Meteor_Force.TenMin;
-        }
-        else
-        {
-            final = Meteor_Force.Min;
-        }
-        // Display the graph
-        ShowGraph(final);
+
+        ShowGraph(result.Series);
     }
 
     // Create a circle GameObject at the given anchored position
@@ -48,23 +43,48 @@ public class Window_Graph : MonoBehaviour
         return gameObject;
     }
 
-    // Display the graph using the provided list of values
-    private void ShowGraph(List<double> valueList)
+    // Display the graph: x is time as a fraction of the run, y is distance as a fraction of the total distance
+    private void ShowGraph(TimeSeries series)
     {
+        int count = series.Count;
+        if (count < 2)
+        {
+            return; // nothing meaningful to draw
+        }
+
         double graphHeight = GraphContainer.sizeDelta.y;
         double graphWidth = GraphContainer.sizeDelta.x;
-        double xSize = graphWidth / (valueList.Count - 1);
-        GameObject lastCircleGameObject = null;
-        for (int i = 0; i < valueList.Count; i++)
+        double t0 = series.Time[0];
+        double duration = series.Time[count - 1] - t0;
+        double totalDistance = series.Distance[count - 1];
+        if (!(duration > 0))
         {
-            double xPosition = i * xSize;
-            double yPosition = (valueList[i] / (Meteor_Force.DistanceTrav)) * graphHeight;
+            return;
+        }
+
+        int stride = Math.Max(1, (int)Math.Ceiling(count / (double)MaxPoints));
+        GameObject lastCircleGameObject = null;
+        for (int i = 0; i < count; i += stride)
+        {
+            int index = Math.Min(i, count - 1);
+            if (i + stride >= count)
+            {
+                index = count - 1; // always finish on the last sample
+            }
+
+            double xPosition = (series.Time[index] - t0) / duration * graphWidth;
+            double yPosition = totalDistance > 0 ? series.Distance[index] / totalDistance * graphHeight : 0.0;
             GameObject circleGameObject = CreateCircle(new Vector2((float)xPosition, (float)yPosition));
             if (lastCircleGameObject != null)
             {
                 CreateDotConnection(lastCircleGameObject.GetComponent<RectTransform>().anchoredPosition, circleGameObject.GetComponent<RectTransform>().anchoredPosition);
             }
+
             lastCircleGameObject = circleGameObject;
+            if (index == count - 1)
+            {
+                break;
+            }
         }
     }
 

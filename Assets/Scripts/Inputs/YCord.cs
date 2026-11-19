@@ -1,22 +1,18 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Collections.Specialized;
 using UnityEngine;
 
 // This script manages the Y coordinate value and ensures it stays within predefined bounds
 public class Ycord : MonoBehaviour
 {
     // Static variable to hold the Y coordinate value
-    public static float Y;
+    public static float Y = 25.0f; // default used when the field is left blank
 
     // Method to parse and validate the input string representing the Y coordinate
     public void StringReader(string s)
     {
         try
         {
-            // Parse the input string to float
-            Y = float.Parse(s);
+            // Parse the input string (culture-independent; accepts "." or "," as the decimal mark)
+            Y = InputParsing.Parse(s);
             // Check if the parsed value is within predefined bounds
             if (Y < -50.0f)
             {

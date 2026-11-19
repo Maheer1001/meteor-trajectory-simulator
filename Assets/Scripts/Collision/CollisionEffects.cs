@@ -1,14 +1,15 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
+using System.Globalization;
+using MTS.Core;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
 
+/// <summary>
+/// Results screen: shows the blast radii for the nine overpressure rings (T1-T9) and the final crater radius (T10),
+/// all in metres. The numbers come from MTS.Core.ImpactModel (Collins, Melosh and Marcus 2005).
+/// </summary>
 public class CollisionEffects : MonoBehaviour
 {
-    // Public properties
-    float[] overpressure = { 275.8f, 1034.2f, 4826.3f, 13789.5f, 20684.3f, 34473.8f, 48263.3f, 68947.6f, 199948.0f };
+    // Radii in metres: [0..8] overpressure rings (0.04 ... 29 psi), [9] final crater radius.
     public static double[] R_impact;
     public static double CraterRadius;
     public TMP_Text T1;
@@ -22,80 +23,46 @@ public class CollisionEffects : MonoBehaviour
     public TMP_Text T9;
     public TMP_Text T10;
 
-    // Called properties
-    double fMass = Meteor_Force.mass;
-    double fVelocity = Meteor_Force.velocity.magnitude;
-    double fRadius = Meteor_Force.meteor_radius;
-    double Pmeteor = DensityRangeInput.Density;
-
-    // Private constants 
-    private TMP_Text[] textArray;
-    private const float G = 6.67430e-11f;
-    private const float EarthMass = 5.972e24f;
-    private const float EarthRadius = 6371e3f;
-    private const double EarthDensity = 5515.0f;
-    private const double EarthGravity = 9.81f;
-
     void Start()
     {
-        // Initialize your array of TMP_Text
-        textArray = new TMP_Text[] { T1, T2, T3, T4, T5, T6, T7, T8, T9, T10 };
-        R_impact = new double[10];
-        CraterRadius = CalculateCraterSize();
-        for (int i = 0; i <= 9; i++)
+        TMP_Text[] textArray = { T1, T2, T3, T4, T5, T6, T7, T8, T9, T10 };
+        double[] radii = CurrentRadii();
+        for (int i = 0; i < textArray.Length; i++)
         {
-            if (i == 9)
+            if (textArray[i] != null)
             {
-                R_impact[i] = CraterRadius;
+                textArray[i].text = radii[i].ToString("F1", CultureInfo.InvariantCulture);
             }
-            else
-            {
-                R_impact[i] = ImpactRadius(overpressure[i]);
-                Debug.Log(R_impact[i] + "This is R_Impact" + i);
-            }
-            // Use the textArray to set the text of TMP_Text
-            textArray[i].text = R_impact[i].ToString();
+        }
+
+        SimulationResult result = SimulationSession.Instance.Result;
+        ImpactAssessment impact = SimulationSession.Instance.Impact;
+        if (result != null && impact != null)
+        {
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "Run ended: {0} ({1}) t={2:F1} s, speed {3:F1} m/s, angle {4:F1} deg, mass {5:F1} kg, altitude {6:F0} m, energy {7:G4} kt TNT, {8}, crater D={9:F1} m",
+                result.Reason, result.Message, result.EndTime, result.ImpactSpeed, result.ImpactAngleDegrees,
+                result.MassAtEnd, result.EndAltitude, impact.EnergyKilotons, impact.Regime, impact.FinalCraterDiameter));
         }
     }
 
-    // Calculates kinetic energy
-    public double KE()
+    /// <summary>The radii for the current session (ten values, zeros if there is no finished run).</summary>
+    public static double[] CurrentRadii()
     {
-        double KineticEnergy = 0.5 * fMass * Math.Pow(fVelocity, 2);
-        return KineticEnergy;
-    }
+        double[] radii = new double[10];
+        ImpactAssessment impact = SimulationSession.Instance.Impact;
+        if (impact != null)
+        {
+            for (int i = 0; i < 9 && i < impact.BlastRadii.Length; i++)
+            {
+                radii[i] = impact.BlastRadii[i];
+            }
 
-    // Calculates crater size
-    private double CalculateCraterSize()
-    {
-        double KineticEnergy = KE();
-        double CraterDiameterCubed = (2 * KineticEnergy) / (Math.PI * Meteor_Force.meteor_radius * EarthDensity * EarthGravity);
-        double CraterDiameter = Math.Pow(CraterDiameterCubed, (1.0f / 3.0f));
-        double radius = CraterDiameter / 2;
-        return radius;
-    }
+            radii[9] = impact.FinalCraterRadius;
+        }
 
-    // Calculates explosive energy
-    private double ExplosiveEnergyCalculation()
-    {
-        float Cd = Atmosphere_Force.DragCoffiecient;
-        Debug.Log(Cd + " Drag cof");
-        float Airdensity = 1.225f;
-        float CSA = (float)Math.PI * (float)Math.Pow(Meteor_Force.meteor_radius, 2f);
-        Debug.Log(CSA + " CSA");
-        float v_mra = Meteor_Force.velocity.magnitude / 15;
-        Debug.Log(v_mra + " v_mra");
-        double ExplosiveEnergy = (double)(0.5 * Cd * Airdensity * CSA * Math.Pow(v_mra, 3.0f));
-        return ExplosiveEnergy;
-    }
-
-    // Calculates impact radius
-    private double ImpactRadius(float overpressure)
-    {
-        double ExplosiveEnergy = ExplosiveEnergyCalculation();
-        double CubeRootEE = Math.Pow(ExplosiveEnergy, 1.0f / 3.0f);
-        double ConsDivOver = Math.Pow((2.83e5 / overpressure), 5.0f / 3.0f);
-        double Impact_Radius = CubeRootEE * ConsDivOver;
-        return Impact_Radius;
+        R_impact = radii;
+        CraterRadius = radii[9];
+        return radii;
     }
 }

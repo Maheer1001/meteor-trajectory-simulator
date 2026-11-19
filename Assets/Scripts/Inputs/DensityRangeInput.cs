@@ -1,22 +1,18 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Collections.Specialized;
 using UnityEngine;
 
 // This script manages the density range input value and ensures it stays within predefined bounds
 public class DensityRangeInput : MonoBehaviour
 {
     // Static variable to hold the density value
-    public static double Density;
+    public static double Density = 4500.0; // mid-range default used when the field is left blank
 
     // Method to parse and validate the input string representing the density value
     public void StringReader(string s)
     {
         try
         {
-            // Parse the input string to float
-            Density = float.Parse(s);
+            // Parse the input string (culture-independent; accepts "." or "," as the decimal mark)
+            Density = InputParsing.Parse(s);
             // Check if the parsed value is within predefined bounds
             if (Density < 1000.0f)
             {

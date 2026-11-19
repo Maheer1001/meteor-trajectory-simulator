@@ -1,22 +1,18 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Collections.Specialized;
 using UnityEngine;
 
 // This script manages the mass range input value and ensures it stays within predefined bounds
 public class MassRangeInput : MonoBehaviour
 {
     // Static variable to hold the mass value
-    public static float Mass;
+    public static float Mass = 30000.0f; // mid-range default used when the field is left blank
 
     // Method to parse and validate the input string representing the mass value
     public void StringReader(string s)
     {
         try
         {
-            // Parse the input string to float
-            Mass = float.Parse(s);
+            // Parse the input string (culture-independent; accepts "." or "," as the decimal mark)
+            Mass = InputParsing.Parse(s);
             // Check if the parsed value is within predefined bounds
             if (Mass < 5000.0f)
             {

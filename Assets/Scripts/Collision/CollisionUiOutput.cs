@@ -1,14 +1,16 @@
 using System;
+using MTS.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 public class CollisionUiOutput : MonoBehaviour
 {
-    private float pi = (float)Math.PI;
+    // The world map spans 878 x 520 units centred on the origin (equirectangular: 360 x 180 degrees).
+    private const double MapHalfWidth = 439.0;
+    private const double MapHalfHeight = 260.0;
+
     private double[] xScaledR;
     private double[] yScaledR;
-    private double xCradius;
-    private double yCradius;
     private double NewLatitude;
     private double NewLongitude;
 
@@ -20,32 +22,21 @@ public class CollisionUiOutput : MonoBehaviour
         Create();
     }
 
-    // Converts impact radii to scaled coordinates and calculates latitude and longitude values
+    // Converts impact radii (m) to map scale and the impact latitude/longitude (degrees) to map coordinates
     void Rconversion()
     {
-        double[] impactArray = CollisionEffects.R_impact;
-
-        if (impactArray != null && impactArray.Length >= 10)
+        double[] impactArray = CollisionEffects.CurrentRadii();
+        double unitsPerMetreX = 2.0 * MapHalfWidth / (2.0 * Math.PI * PhysicalConstants.EarthRadius);
+        double unitsPerMetreY = 2.0 * MapHalfHeight / (Math.PI * PhysicalConstants.EarthRadius);
+        for (int i = 0; i < impactArray.Length; i++)
         {
-            float temp = (878 / (2 * pi * 6371000));
-            float temp2 = (520 / (2 * pi * 6371000));
-            for (int i = 0; i <= 9; i++)
-            {
-                xScaledR[i] = temp * impactArray[i];
-                yScaledR[i] = temp2 * impactArray[i];
-                Debug.Log(xScaledR[i] + "This is xScaledR " + i);
-                Debug.Log(yScaledR[i] + "This is yScaledR " + i);
-            }
-        }
-        else
-        {
-            Debug.LogError("R_impact array is null or doesn't have enough elements.");
+            xScaledR[i] = unitsPerMetreX * impactArray[i];
+            yScaledR[i] = unitsPerMetreY * impactArray[i];
         }
 
-        float Temp = 180 * (float)CoordinateCalculator.Latitude;
-        NewLatitude = Temp / 439;
-        float Temp2 = 180 * (float)CoordinateCalculator.Longitude; //should be 90
-        NewLongitude = Temp2 / 260;
+        CoordinateCalculator.ComputeImpactLocation();
+        NewLatitude = CoordinateCalculator.Latitude / 90.0 * MapHalfHeight;
+        NewLongitude = CoordinateCalculator.Longitude / 180.0 * MapHalfWidth;
     }
 
     // Creates collision visualization circles

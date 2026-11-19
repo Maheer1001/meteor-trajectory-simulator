@@ -1,195 +1,57 @@
-// Import necessary namespaces
 using System;
-using System.Collections.Generic;
+using System.Collections;
+using System.Globalization;
 using System.IO;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
+using MTS.Core;
 using TMPro;
-using Unity.VisualScripting.FullSerializer;
 using UnityEngine;
+using UnityEngine.Networking;
 
-// Main script for calculating coordinates and running the simulation
+// Works out where the run ended on the Earth's surface and looks up a place name for it.
 public class CoordinateCalculator : MonoBehaviour
 {
-    private Vector3 position;
+    // Latitude and longitude of the end point in degrees (north and east positive).
     public static double Latitude;
     public static double Longitude;
 
     // Reference to the TMP_Text component
     public TMP_Text JsonParseText;
 
-    // Start method is called when the script is first run
+    private UnityWebRequest request;
+
     void Start()
     {
-        // Calculate initial position in Cartesian coordinates based on some calculations
-        position.x = Xcord.X * (6371000 / (float)Meteor_Force.Oradius) * 4050;
-        position.y = Ycord.Y * (6371000 / (float)Meteor_Force.Oradius) * 4050;
-        position.z = Zcord.Z * (6371000 / (float)Meteor_Force.Oradius) * 4050;
-
-        // Call the Main method to set up the simulation
-        Main();
+        ComputeImpactLocation();
+        StartCoroutine(ReverseGeocoding.ReverseGeocode(Latitude, Longitude, JsonParseText, r => request = r));
     }
 
-    // Main method to set up and run the simulation
-    async void Main()
+    void OnDestroy()
     {
-        // Create initial coordinates using Cartesian coordinates
-        ICoordinates initialCoordinates = new CartesianCoordinates(position.x, position.y, position.z);
-
-        // Create a motion simulation instance with parameters from a Dictionary
-        Dictionary<string, double> motionParameters = new Dictionary<string, double>
+        // Leaving the scene cancels a lookup that is still in flight.
+        if (request != null)
         {
-            { "RotationRate", 7.2722e-5 },
-            { "AxialTilt", Math.PI * 23.5 / 180 },
-            { "OrbitalInclination", Math.PI * 0.00005 },
-            { "OrbitalPeriod", 365.25 * 24 * 3600 },
-            { "PrecessionRate", Math.PI * 0.000014 },
-            { "NutationAmplitude", Math.PI * 0.000005 },
-            { "NutationFrequency", Math.PI * 0.000001 }
-        };
-
-        IMotionSimulation motionSimulation = new MotionSimulation(motionParameters);
-
-        // Create an Earth object with initial coordinates and motion simulation
-        Earth earth = new Earth(initialCoordinates, motionSimulation);
-
-        // Use the actual time from Meteor_Force.time (in seconds) for the simulation
-        double timeInSeconds = Meteor_Force.time;
-
-        // Update coordinates based on the simulated motion
-        MotionUpdateResult updateResult = earth.UpdateCoordinates(timeInSeconds);
-
-        Latitude = updateResult.NewLatitude;
-        Longitude = updateResult.NewLongitude;
-
-        // Pass the updated latitude and longitude to ReverseGeocoding
-        await ReverseGeocoding.ReverseGeocode(updateResult.NewLatitude, updateResult.NewLongitude, JsonParseText);
-    }
-
-    // A readonly struct representing geographic coordinates (latitude and longitude)
-    readonly struct Coordinates
-    {
-        public double Latitude { get; }
-        public double Longitude { get; }
-
-        // Constructor to initialize coordinates
-        public Coordinates(double latitude, double longitude)
-        {
-            Latitude = latitude;
-            Longitude = longitude;
+            request.Abort();
+            request = null;
         }
     }
 
-    // A struct representing Cartesian coordinates and implementing ICoordinates interface
-    struct CartesianCoordinates : ICoordinates
+    /// <summary>
+    /// Sets <see cref="Latitude"/> / <see cref="Longitude"/> from the session's end state. The inertial end position is
+    /// rotated into the Earth-fixed frame using the elapsed time (Earth's sidereal rotation; at t = 0 both frames
+    /// coincide). See MTS.Core.Geo for the axis convention (Unity +Y is the rotation axis).
+    /// </summary>
+    public static void ComputeImpactLocation()
     {
-        private readonly double x;
-        private readonly double y;
-        private readonly double z;
-
-        // Constructor to initialize Cartesian coordinates
-        public CartesianCoordinates(double x, double y, double z)
+        SimulationSession session = SimulationSession.Instance;
+        if (session.Runner == null)
         {
-            this.x = x;
-            this.y = y;
-            this.z = z;
+            Latitude = 0;
+            Longitude = 0;
+            return;
         }
 
-        // Convert Cartesian coordinates to geographic coordinates
-        public Coordinates GetCoordinates()
-        {
-            // Convert Cartesian coordinates to latitude and longitude on Earth's surface
-            double latitude = Math.Asin(z / 6371); // Assuming Earth radius is 6371 km
-            double longitude = Math.Atan2(y, x);
-
-            return new Coordinates(latitude, longitude);
-        }
-    }
-
-    // Interface for providing geographic coordinates
-    interface ICoordinates
-    {
-        Coordinates GetCoordinates();
-    }
-
-    // A readonly struct representing the result of a motion update
-    readonly struct MotionUpdateResult
-    {
-        public double NewLatitude { get; }
-        public double NewLongitude { get; }
-
-        // Constructor to initialize motion update result
-        public MotionUpdateResult(double newLatitude, double newLongitude)
-        {
-            NewLatitude = newLatitude;
-            NewLongitude = newLongitude;
-        }
-    }
-
-    // Interface for simulating Earth's motion
-    interface IMotionSimulation
-    {
-        MotionUpdateResult UpdateMotion(Coordinates initialCoordinates, double timeInSeconds);
-    }
-
-    // A readonly struct implementing IMotionSimulation for Earth's motion simulation
-    readonly struct MotionSimulation : IMotionSimulation
-    {
-        // Dictionary to store motion parameters
-        private readonly Dictionary<string, double> motionParameters;
-
-        // Constructor to initialize motion parameters
-        public MotionSimulation(Dictionary<string, double> parameters)
-        {
-            motionParameters = parameters;
-        }
-
-        // Method to update Earth's motion based on time
-        public MotionUpdateResult UpdateMotion(Coordinates initialCoordinates, double timeInSeconds)
-        {
-            // Access parameters from the Dictionary
-            double deltaLongitude = motionParameters["RotationRate"] * timeInSeconds;
-            double deltaLatitude = motionParameters["AxialTilt"] * Math.Cos(motionParameters["OrbitalInclination"]) * Math.Sin(2 * Math.PI * timeInSeconds / motionParameters["OrbitalPeriod"]);
-
-            // Update latitude and longitude based on calculated changes
-            double newLongitude = initialCoordinates.Longitude + deltaLongitude;
-            double newLatitude = initialCoordinates.Latitude + deltaLatitude;
-
-            // Calculate additional changes due to precession and nutation
-            double deltaPrecession = motionParameters["PrecessionRate"] * timeInSeconds;
-            double deltaNutation = motionParameters["NutationAmplitude"] * Math.Sin(motionParameters["NutationFrequency"] * timeInSeconds);
-
-            // Update longitude with precession and nutation changes
-            double updatedLongitude = newLongitude + deltaPrecession + deltaNutation;
-
-            // Return the updated motion result
-            return new MotionUpdateResult(newLatitude, updatedLongitude);
-        }
-    }
-
-    // Class representing Earth with coordinates and motion simulation
-    class Earth
-    {
-        private readonly ICoordinates coordinates;
-        private readonly IMotionSimulation motionSimulation;
-
-        // Constructor to initialize Earth with coordinates and motion simulation
-        public Earth(ICoordinates coordinates, IMotionSimulation motionSimulation)
-        {
-            this.coordinates = coordinates;
-            this.motionSimulation = motionSimulation;
-        }
-
-        // Method to update Earth's coordinates based on time
-        public MotionUpdateResult UpdateCoordinates(double timeInSeconds)
-        {
-            // Get initial coordinates
-            Coordinates initialCoordinates = coordinates.GetCoordinates();
-
-            // Update motion based on the provided time
-            return motionSimulation.UpdateMotion(initialCoordinates, timeInSeconds);
-        }
+        MeteorState end = session.Result != null ? session.Result.FinalState : session.Runner.State;
+        Geo.LatitudeLongitude(end.Position, end.Time, out Latitude, out Longitude);
     }
 }
 
@@ -242,112 +104,105 @@ static class ApiKeyLoader
     }
 }
 
-// Class for reverse geocoding
-class ReverseGeocoding
-{
-    public static TMP_Text JsonParse;
-    // Asynchronous method to reverse geocode given latitude and longitude
-    public static async Task<string> ReverseGeocode(double latitude, double longitude, TMP_Text JsonParseText)
-    {
-        JsonParse = JsonParseText;
 
+// Reverse geocoding through geocode.maps.co
+static class ReverseGeocoding
+{
+    [Serializable]
+    private class ReverseResult
+    {
+        public string display_name;
+        public string error;
+    }
+
+    // Looks up a place name for the given latitude/longitude (degrees) and writes it into the text field.
+    public static IEnumerator ReverseGeocode(double latitude, double longitude, TMP_Text output, Action<UnityWebRequest> onRequest)
+    {
         // Without an API key the rest of the simulation still works, just without a place name
         string apiKey = ApiKeyLoader.GetGeocodeApiKey();
         if (apiKey == null)
         {
             Debug.LogWarning("No geocode.maps.co API key found. Set GEOCODE_MAPS_CO_API_KEY or create Assets/StreamingAssets/secrets.json (see the README).");
-            JsonParse.text = "Location lookup unavailable - add an API key";
-            return null;
+            SetText(output, "Location lookup unavailable - add an API key");
+            yield break;
         }
 
-        using (HttpClient client = new HttpClient())
+        string apiUrl = string.Format(CultureInfo.InvariantCulture,
+            "https://geocode.maps.co/reverse?lat={0:F6}&lon={1:F6}&api_key={2}",
+            latitude, longitude, Uri.EscapeDataString(apiKey));
+
+        using (UnityWebRequest request = UnityWebRequest.Get(apiUrl))
         {
-            // Construct the API URL with latitude, longitude, and API key
-            string apiUrl = $"https://geocode.maps.co/reverse?lat={latitude}&lon={longitude}&api_key={Uri.EscapeDataString(apiKey)}";
+            onRequest?.Invoke(request);
+            yield return request.SendWebRequest();
+            onRequest?.Invoke(null);
 
-            // Send a GET request to the API
-            HttpResponseMessage response;
-            try
+            if (output == null)
             {
-                response = await client.GetAsync(apiUrl);
-            }
-            catch (Exception e)
-            {
-                // No internet connection or the site could not be reached
-                Debug.LogWarning("Reverse geocoding request failed: " + e.Message);
-                JsonParse.text = "Location lookup unavailable - check your internet connection";
-                return null;
+                yield break; // scene was unloaded
             }
 
-            // Check if the response is successful
-            if (response.IsSuccessStatusCode)
+            if (request.result == UnityWebRequest.Result.ConnectionError)
             {
-                // Read the response content as a string
-                string result = await response.Content.ReadAsStringAsync();
+                Debug.LogWarning("Reverse geocoding request failed: " + request.error);
+                SetText(output, "Location lookup unavailable - check your internet connection");
+                yield break;
+            }
 
-                // Check for specific conditions indicating location not found or in the sea
-                if (result.Contains("Unable to geocode"))
+            string body = request.downloadHandler != null ? request.downloadHandler.text : "";
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.Log($"Error: {request.responseCode} - {request.error}");
+                if (body.Contains("Unable to geocode"))
                 {
-                    JsonParse.text = ("Location is in the sea");
-                    return null;
+                    SetText(output, "Location is in the sea");
                 }
-
-                // Manually parse JSON (improved example)
-                int displayIndex = result.IndexOf("\"display_name\"");
-
-                if (displayIndex != -1)
+                else if (request.responseCode == 401 || request.responseCode == 403)
                 {
-                    int colonIndex = result.IndexOf(":", displayIndex);
-
-                    if (colonIndex != -1)
-                    {
-                        int commaIndex = result.IndexOf(",", colonIndex);
-                        int endIndex = result.LastIndexOf('}', colonIndex);
-
-                        if (commaIndex != -1 && endIndex != -1)
-                        {
-                            // Extract and trim the display name
-                            string displayName = result.Substring(colonIndex + 1, endIndex - colonIndex).Trim(' ', '"', '{', '}');
-                            Debug.Log("Display Name: " + displayName);
-
-                            // Split the string into an array
-                            string[] displayNameArray = displayName.Split(',');
-
-                            // Reverse the array
-                            Array.Reverse(displayNameArray);
-
-                            // Join the elements back into a string
-                            string reversedDisplayName = string.Join(", ", displayNameArray);
-
-                            Debug.Log("Reversed Display Name: " + reversedDisplayName);
-
-                            JsonParse.text = (reversedDisplayName);
-
-                            return reversedDisplayName;
-
-                        }
-                    }
-                }
-
-                Debug.Log("Failed to extract Display Name from JSON.");
-                return null;
-            }
-            else
-            {
-                // Log error information if the request is not successful
-                Debug.Log($"Error: {response.StatusCode} - {response.ReasonPhrase}");
-
-                // 401/403 means the key was missing or rejected
-                if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
-                {
-                    JsonParse.text = "Location lookup unavailable - API key was rejected";
+                    SetText(output, "Location lookup unavailable - API key was rejected");
                 }
                 else
                 {
-                    JsonParse.text = "Location lookup unavailable";
+                    SetText(output, "Location lookup unavailable");
                 }
-                return null;
+
+                yield break;
             }
+
+            ReverseResult parsed = null;
+            try
+            {
+                parsed = JsonUtility.FromJson<ReverseResult>(body);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Could not parse reverse geocoding response: " + e.Message);
+            }
+
+            if (parsed == null || string.IsNullOrWhiteSpace(parsed.display_name))
+            {
+                // geocode.maps.co answers with an error (or no address) for points in the sea
+                SetText(output, "Location is in the sea");
+                yield break;
+            }
+
+            // The display name runs from the most to the least specific place; show it country first.
+            string[] parts = parsed.display_name.Split(',');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                parts[i] = parts[i].Trim();
+            }
+
+            Array.Reverse(parts);
+            SetText(output, string.Join(", ", parts));
+        }
+    }
+
+    private static void SetText(TMP_Text output, string text)
+    {
+        if (output != null)
+        {
+            output.text = text;
         }
     }
 }

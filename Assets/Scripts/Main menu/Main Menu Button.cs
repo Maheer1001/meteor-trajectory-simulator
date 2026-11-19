@@ -1,115 +1,87 @@
-using Unity.VisualScripting;
+using MTS.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-// This script manages the main menu buttons and their functionalities
+// This script manages the main menu buttons and their functionalities.
+// Run state lives in SimulationSession; pausing just stops the runner, so nothing needs to be saved or restored.
 public class MainMenuButton : MonoBehaviour
 {
-
+    // Kept for compatibility; true while a run is paused behind the in-simulation menu.
     public static bool InitialisationCountS = false;
     public static bool InitialisationCountA = false;
 
-    // Load the specified scene (generally variable input, Main menu --> Variable Input)
+    // Load the specified scene (Main menu --> Variable Input, Variable Input --> Space Simulation, results --> menus)
     public void MainMenu(string sceneName)
     {
+        // Going back to the input screen or starting from it means a fresh run with the inputs as they are now.
+        if (sceneName == "VariableInput" || sceneName == "SpaceSimulation")
+        {
+            SimulationSession.Instance.Reset();
+            InitialisationCountS = false;
+            InitialisationCountA = false;
+        }
+
+        Time.timeScale = 1;
         SceneManager.LoadScene(sceneName);
     }
 
-    // Load the specified scene and pause the simulation when in Stage 1 (Space Traversal)
+    // Pause the simulation during Stage 1 (Space Traversal) and open the in-simulation menu
     public void MainMenuS1(string sceneName)
     {
         InitialisationCountS = true;
-        Meteor_Force.isPaused = true;
-        // Push simulation parameters to stack
-        PushToStack(Meteor_Force.time);
-        PushToStack(Meteor_Force.radius);
-        PushToStack(Meteor_Force.velocity.x);
-        PushToStack(Meteor_Force.velocity.y);
-        PushToStack(Meteor_Force.velocity.z);
-        PushToStack(Meteor_Force.gravitationalAcc);
-        Time.timeScale = 0;
+        Pause();
         SceneManager.LoadScene(sceneName);
     }
 
-    // Load the specified scene and pause the simulation when in Stage 2 (Atmospheric Traversal)
+    // Pause the simulation during Stage 2 (Atmospheric Traversal) and open the in-simulation menu
     public void MainMenu2(string sceneName)
     {
         InitialisationCountA = true;
-        Atmosphere_Force.isPaused = true;
-        // Push simulation parameters to stack
-        PushToStack(Meteor_Force.time);
-        PushToStack(Atmosphere_Force.distance);
-        PushToStack(Meteor_Force.velocity.x);
-        PushToStack(Meteor_Force.velocity.y);
-        PushToStack(Meteor_Force.velocity.z);
-        PushToStack(Atmosphere_Force.gravitationalAcc);
-        PushToStack(Meteor_Force.mass);
-        PushToStack(Meteor_Force.meteor_radius);
-        Time.timeScale = 0;
+        Pause();
         SceneManager.LoadScene(sceneName);
     }
 
-    // Continue the simulation
+    // Continue the simulation from where it was paused
     public void Continue()
     {
+        SimulationSession session = SimulationSession.Instance;
         string sceneName;
-        if (Meteor_Force.Stage == 1)
+        switch (session.Stage)
         {
-            // Resume simulation for stage 1
-            Meteor_Force.isPaused = false;
-            // Pop simulation parameters from stack
-            Meteor_Force.gravitationalAcc = PopFromStack();
-            Meteor_Force.velocity.z = (float)PopFromStack();
-            Meteor_Force.velocity.y = (float)PopFromStack();
-            Meteor_Force.velocity.x = (float)PopFromStack();
-            Meteor_Force.radius = PopFromStack();
-            Meteor_Force.time = (float)PopFromStack();
-            sceneName = ("SpaceSimulation");
+            case SimulationStage.Space:
+                sceneName = "SpaceSimulation";
+                break;
+            case SimulationStage.Atmosphere:
+                sceneName = "AtmosphereReached";
+                break;
+            case SimulationStage.Ended:
+                sceneName = "EarthCollision";
+                break;
+            default:
+                sceneName = "VariableInput";
+                break;
         }
-        else if (Meteor_Force.Stage == 2)
-        {
-            // Resume simulation for stage 2
-            Atmosphere_Force.isPaused = false;
-            // Pop simulation parameters from stack
-            Meteor_Force.meteor_radius = (float)PopFromStack();
-            Meteor_Force.mass = (float)PopFromStack();
-            Atmosphere_Force.gravitationalAcc = (float)PopFromStack();
-            Meteor_Force.velocity.z = (float)PopFromStack();
-            Meteor_Force.velocity.y = (float)PopFromStack();
-            Meteor_Force.velocity.x = (float)PopFromStack();
-            Atmosphere_Force.distance = (float)PopFromStack();
-            Meteor_Force.time = (float)PopFromStack();
-            sceneName = ("AtmosphereReached");
-        }
-        else
-        {
-            // Proceed to Earth collision scene
-            sceneName = ("EarthCollision");
-        }
-        Time.timeScale = 1;
-        SceneManager.LoadScene(sceneName);
-    }
 
-    // Restart the simulation
-    public void Restart(string sceneName)
-    {
-        // Clear stack and reset simulation parameters
-        Meteor_Force.Min.Clear();
-        Meteor_Force.TenMin.Clear();
-        Meteor_Force.ThirtyMin.Clear();
-        Meteor_Force.valueStack.Clear();
-        SceneManager.LoadScene(sceneName);
+        session.IsPaused = false;
         InitialisationCountS = false;
         InitialisationCountA = false;
         Time.timeScale = 1;
-        Meteor_Force.isPaused = false;
-        Atmosphere_Force.isPaused = false;
+        SceneManager.LoadScene(sceneName);
+    }
+
+    // Restart the simulation: discard the current run completely
+    public void Restart(string sceneName)
+    {
+        SimulationSession.Instance.Reset();
+        InitialisationCountS = false;
+        InitialisationCountA = false;
+        Time.timeScale = 1;
+        SceneManager.LoadScene(sceneName);
     }
 
     // Exit the program
     public void ExitProgram()
     {
-        // Check if running in Unity Editor or standalone build
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else
@@ -117,22 +89,9 @@ public class MainMenuButton : MonoBehaviour
 #endif
     }
 
-    // Push a value to the stack
-    private void PushToStack(double value)
+    private static void Pause()
     {
-        Meteor_Force.valueStack.Push(value);
-    }
-
-    // Pop a value from the stack
-    private double PopFromStack()
-    {
-        if (Meteor_Force.valueStack.Count > 0)
-        {
-            return Meteor_Force.valueStack.Pop();
-        }
-        else
-        {
-            return 0.0f;
-        }
+        SimulationSession.Instance.IsPaused = true;
+        Time.timeScale = 0;
     }
 }
