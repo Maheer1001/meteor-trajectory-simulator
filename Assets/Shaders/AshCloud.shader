@@ -49,7 +49,8 @@ Shader "MTS/AshCloud"
                 float ang = atan2(i.p.y, i.p.x);
                 float t = _Time.y * 0.05;
                 float n = MTS_Fbm(float3(i.p * _Scale, t), 5);
-                float lobes = (MTS_Fbm(float3(ang * 2.0, 0.0, 5.0), 3) - 0.5) * 0.35 * _Radius;
+                float2 dir = i.p / max(r, 1e-5);
+                float lobes = (MTS_Fbm(float3(dir * 0.6, 5.0), 3) - 0.5) * 0.35 * _Radius;
                 float front = _Radius + lobes + (n - 0.5) * 0.08;
                 float inside = 1.0 - smoothstep(front - 0.06, front, r);
                 float a = inside * saturate(n * 1.8 - 0.25) * _Opacity;

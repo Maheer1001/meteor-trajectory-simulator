@@ -52,7 +52,8 @@ Shader "MTS/GroundScar"
                 float ang = atan2(i.p.y, i.p.x);
                 float n = MTS_Fbm(float3(i.p * 6.0, 1.0), 4);
                 // radial streaks: fine angular noise smeared along the radius
-                float streak = MTS_Noise3(float3(ang * 260.0, r * 3.0, 0.0)) * 0.6 + MTS_Noise3(float3(ang * 90.0, r * 1.5, 4.0)) * 0.4;
+                float2 dir = i.p / max(r, 1e-5); // seam-free angular coordinate
+                float streak = MTS_Noise3(float3(dir * 41.0, r * 3.0)) * 0.6 + MTS_Noise3(float3(dir * 14.0, r * 1.5 + 4.0)) * 0.4;
                 float3 col = lerp(_Color.rgb, _StreakColor.rgb, saturate(streak * _Radial * 1.2 + n * 0.3));
                 // a burnt "standing" zone right under the burst, irregular outer edge (the butterfly shape)
                 float lobe = 0.75 + 0.25 * sin(ang * 2.0 + 0.6) + (n - 0.5) * 0.3;

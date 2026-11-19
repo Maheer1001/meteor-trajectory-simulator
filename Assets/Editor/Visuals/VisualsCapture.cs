@@ -20,7 +20,8 @@ namespace MTS.Visuals.EditorTools
     ///   space-near   from rest at (1,1,1) (643 km): the three cameras at the start and near the air
     ///   space-big    Chicxulub-size body inbound: the three cameras
     ///   materials    space close-ups of the eight materials and a four-material mix
-    ///   stony, iron, small                 atmosphere runs (250 t stony, 1000 t iron impact, 60 t stony from rest)
+    ///   stony, iron, small, small-impact   atmosphere runs (250 t stony, 1000 t iron impact, 60 t stony from rest,
+    ///                                      60 t iron impact)
     ///   chelyabinsk, tunguska, barringer, onekm, chicxulub   atmosphere runs of the impact scenarios
     /// </summary>
     [InitializeOnLoad]
@@ -177,6 +178,13 @@ namespace MTS.Visuals.EditorTools
                     case "small":
                         session.Composition = MeteorComposition.Default;
                         return MeteorProperties.FromComposition(60000, MeteorComposition.Default, 1, 1, 1);
+                    case "small-impact":
+                    {
+                        // a 60 t iron that survives to the ground: a small (tens of metres) crater
+                        MeteorComposition iron = MeteorComposition.Single(MeteorMaterialPresets.IronId);
+                        session.Composition = iron;
+                        return MeteorProperties.FromComposition(60000, iron, 2.2, 1.6, -1.4, EntryMode.Inbound, 15000, 60, enableFragmentation: false);
+                    }
                     case "iron":
                     {
                         // a fragmentation-free iron body: reaches the ground and makes a crater

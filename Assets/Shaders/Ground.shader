@@ -80,6 +80,13 @@ Shader "MTS/Ground"
                 float3 h = normalize(sun + v);
                 col += pow(saturate(dot(up, h)), 120.0) * 1.5 * ocean * saturate(ndl * 4.0) * (1.0 - cloudShadow);
 
+                // water mirrors the sky at grazing angles (otherwise a low view over the sea is a flat dark navy)
+                float fres = 0.02 + 0.98 * pow(1.0 - saturate(dot(up, v)), 5.0);
+                float3 rdir = reflect(-v, up);
+                rdir.y = max(rdir.y, 0.02);
+                float3 skyRefl = MTS_SkyColor(normalize(rdir), sun, min(_MTS_CamAlt, 2000.0));
+                col = lerp(col, skyRefl * 0.85, fres * ocean * 0.85);
+
                 // night lights
                 float night = 1.0 - smoothstep(-0.1, 0.12, ndl);
                 col += lights * lights * float3(1.0, 0.8, 0.55) * 1.4 * night;

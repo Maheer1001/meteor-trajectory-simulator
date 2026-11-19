@@ -234,7 +234,7 @@ namespace MTS.Visuals
             // fireball still reads as a bright point) and never larger than a fraction of the view.
             float cam = Mathf.Max(CameraDistance, 1f);
             // (and at least ~1.5 degrees across once it glows at all, so a distant fireball never vanishes)
-            float glowSize = Mathf.Max(sheath * (broken ? 3f + 5f * b : 5f + 14f * b), cam * Mathf.Max(0.03f * b, b > 0.02f ? 0.026f : 0f)) * (1f + flash * 1.2f);
+            float glowSize = Mathf.Max(sheath * (broken ? 3f + 5f * b : 5f + 14f * b) / (1f + Mathf.Log10(1f + Radius / 50f)), cam * Mathf.Max(0.03f * b, b > 0.02f ? 0.026f : 0f)) * (1f + flash * 1.2f);
             glowSize = Mathf.Min(glowSize, cam * 0.9f);
             glow.gameObject.SetActive(b > 0.01f || flash > 0.01f);
             glow.localScale = Vector3.one * glowSize;

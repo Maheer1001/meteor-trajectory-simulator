@@ -48,7 +48,8 @@ Shader "MTS/Shockwave"
                 float r = length(i.p);
                 if (r > 1.0) discard;
                 float ang = atan2(i.p.y, i.p.x);
-                float wobble = (MTS_Noise3(float3(ang * 6.0, r * 8.0, _Time.y)) - 0.5) * _Width * 1.5;
+                float2 dir = i.p / max(r, 1e-5); // seam-free angular coordinate
+                float wobble = (MTS_Noise3(float3(dir * 1.0, r * 8.0 + _Time.y)) - 0.5) * _Width * 1.5;
                 float x = (r - _Radius + wobble) / max(_Width, 1e-4);
                 float front = exp(-x * x);
                 float inside = saturate(1.0 - r / max(_Radius, 1e-4));

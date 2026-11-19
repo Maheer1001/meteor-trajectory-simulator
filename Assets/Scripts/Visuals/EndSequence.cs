@@ -195,7 +195,7 @@ namespace MTS.Visuals
                     BuildScar(groundZero, upAtZero, (float)scarR, airburst ? 1f : 0.35f);
                 }
 
-                if (severity > 0.45f)
+                if (severity > 0.55f)
                 {
                     BuildAsh(groundZero, upAtZero, Mathf.Min(farR * 1.3f, 3.0e6f), Mathf.Max(3000f, Mathf.Min(fireR * 0.25f, 30000f)));
                 }
@@ -211,7 +211,7 @@ namespace MTS.Visuals
 
             float t = 0f;
             float flashRadius = Mathf.Max(3000f, fireR * 25f, nearR * 6f);
-            float ashTarget = groundEffects ? Mathf.Clamp01((severity - 0.45f) / 0.4f) * 0.85f : 0f;
+            float ashTarget = groundEffects ? Mathf.Clamp01((severity - 0.55f) / 0.35f) * 0.85f : 0f;
             float blinding = Mathf.InverseLerp(0.3f, 0.7f, severity);
             bool secondShake = false;
             while (t < length)
@@ -223,15 +223,16 @@ namespace MTS.Visuals
                 visuals.SetEndProgress(Mathf.InverseLerp(0.12f, 0.85f, k));
 
                 // flash: very fast rise, slow decay; big events white the screen out
-                float f = t < 0.08f ? t / 0.08f : Mathf.Exp(-(t - 0.08f) * Mathf.Lerp(2.6f, 1.1f, blinding));
+                float f = t < 0.08f ? t / 0.08f : Mathf.Exp(-(t - 0.08f) * Mathf.Lerp(2.6f, 1.9f, blinding));
+                float whiteout = blinding * (t < 0.06f ? t / 0.06f : Mathf.Exp(-(t - 0.06f) * 4.5f)); // the blinding instant
                 float flashI = f * Mathf.Lerp(0.8f, 6f, severity);
                 VisualsGlobals.SetFlash(new Color(1f, 0.88f, 0.72f) * flashI, flashAt, flashRadius);
-                if (flashVolume != null) flashVolume.weight = Mathf.Clamp01(f * Mathf.Lerp(0.9f, 1.6f, blinding));
+                if (flashVolume != null) flashVolume.weight = Mathf.Clamp01(f * 0.9f + whiteout);
                 if (flashGlow != null)
                 {
                     float viewDist = Vector3.Distance(visuals.CameraPosition, flashAt);
-                    float size = Mathf.Max(fireR * 5f, viewDist * Mathf.Lerp(0.15f, 2.5f, blinding)) * (0.3f + 0.7f * Mathf.Sqrt(Mathf.Clamp01(t * 2f)));
-                    size = Mathf.Min(size, viewDist * Mathf.Lerp(0.6f, 3f, blinding));
+                    float size = Mathf.Max(fireR * 4f, viewDist * Mathf.Lerp(0.15f, 2.5f, whiteout)) * (0.3f + 0.7f * Mathf.Sqrt(Mathf.Clamp01(t * 2f)));
+                    size = Mathf.Min(size, viewDist * Mathf.Lerp(0.6f, 3f, whiteout));
                     flashGlow.localScale = Vector3.one * size;
                     flashGlowMat.SetFloat("_Intensity", f * Mathf.Lerp(2.5f, 5f, blinding));
                 }
@@ -328,7 +329,7 @@ namespace MTS.Visuals
         {
             fireballMat = new Material(visuals.library.fireball);
             fireballMat.SetFloat("_Seed", Random.value * 50f);
-            fireballMat.SetFloat("_Intensity", Mathf.Lerp(2f, 4f, severity));
+            fireballMat.SetFloat("_Intensity", Mathf.Lerp(1.6f, 2.2f, severity));
             GameObject go = Spawn("Fireball", VisualLayers.Near, ProceduralMeshes.Icosphere(4), fireballMat);
             go.transform.position = at;
             go.transform.localScale = Vector3.one * 0.01f;
