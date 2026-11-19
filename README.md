@@ -1,10 +1,10 @@
 # Meteor Trajectory Simulator
 
-![Demo: configuring a meteor, falling through space and the atmosphere, then the impact map, blast radii and distance graph](media/demo.gif)
+![Demo: setting up a stony meteoroid, flying past a true-scale Earth, a glowing atmospheric entry with break-up and airburst, then the results summary, damage-ring map and flight charts](media/demo.gif)
 
-*Visuals are an early version; a graphics overhaul is planned.*
+A Unity simulation of a meteor falling towards Earth. You set the meteor's properties and starting position, then watch it fall through space, enter the atmosphere, and either burn up, explode in the air or hit the ground. The simulator then estimates the energy, crater and blast radii and shows where on Earth it happened.
 
-A Unity simulation of a meteor falling towards Earth. You set the meteor's properties and starting position, then watch it fall through space, enter the atmosphere, and either burn up or hit the ground. If it hits, the simulator estimates the crater size and blast radii and shows where on Earth it landed.
+**Quick start (Windows):** install Unity 2022.3.7f1, then double-click **`run.bat`**. See [Open & run](#open--run).
 
 > My A-Level Computer Science NEA (AQA), built in Unity with C#.
 
@@ -46,25 +46,51 @@ The physics is in a separate, unit-tested C# library (`Assets/Scripts/Core`); [d
 
 ## Screenshots
 
-| Variable input | Atmosphere stage | Impact map |
-| --- | --- | --- |
-| ![Variable input screen](media/screenshot-input.png) | ![Atmosphere stage](media/screenshot-atmosphere.png) | ![Impact map with blast radius rings](media/screenshot-impact.png) |
+| Launch settings and HUD | Atmospheric entry |
+| --- | --- |
+| ![Space stage with the flight-data HUD and launch settings over a true-scale Earth](media/screenshot-launch.png) | ![Chase camera on a glowing fireball with its ionisation trail](media/screenshot-fireball.png) |
+| **Results summary** | **Damage-ring map** |
+| ![Airburst results: energy compared with Hiroshima, Chelyabinsk and Tunguska, and the blast table](media/screenshot-results.png) | ![World map with geodesic damage rings, legend and scale bar](media/screenshot-map.png) |
+
+The original NEA input screen is kept as it was: ![Variable input screen](media/screenshot-input.png)
 
 ## Open & run
 
-1. Install **Unity Hub** from https://unity.com/download.
-2. In Unity Hub, go to **Installs → Install Editor** and install **Unity 2022.3.7f1** (the version in `ProjectSettings/ProjectVersion.txt`). If it isn't listed, get it from the [Unity download archive](https://unity.com/releases/editor/archive). Other 2022.3 LTS versions should also work, but Unity will ask to upgrade the project.
-3. In Unity Hub, go to **Projects → Add → Add project from disk** and select this folder. The first open rebuilds `Library/`, which takes a few minutes.
-4. In the Project window, open **`Assets/Scenes/MainMenu.unity`** (the first scene in the build settings).
-5. Press **Play**.
+You need **Unity 2022.3.7f1** (the version in `ProjectSettings/ProjectVersion.txt`). Install **Unity Hub** from https://unity.com/download, then **Installs → Install Editor → 2022.3.7f1** (or get it from the [download archive](https://unity.com/releases/editor/archive)). Other 2022.3 LTS versions should work, but Unity will ask to upgrade the project.
+
+### Easiest: `run.bat` (Windows)
+
+Double-click **`run.bat`** in the repository folder, or run it from a terminal:
+
+```powershell
+.\run.bat              # builds the game the first time (a few minutes), then starts it
+.\run.bat -Windowed    # play in a 1600x900 window instead of full screen
+.\run.bat -Rebuild     # force a fresh build (it also rebuilds automatically when files change)
+.\run.bat -Editor      # open the project in the Unity Editor on the main menu scene
+```
+
+The build goes to `Builds/Windows/MeteorTrajectorySimulator.exe` (gitignored); after the first build you can also start that `.exe` directly. The script finds Unity in the usual Unity Hub or standalone install folders; if yours is elsewhere, set `UNITY_EDITOR` to the full path of `Unity.exe`. Close the Unity Editor before building from the script (Unity can't open the same project twice).
+
+### In the Unity Editor
+
+1. In Unity Hub, **Projects → Add → Add project from disk** and select this folder (or run `.\run.bat -Editor`). The first open rebuilds `Library/`, which takes a few minutes.
+2. Use **Tools → Meteor Simulator → Play from main menu**, or open `Assets/Scenes/MainMenu.unity` and press **Play**.
 
 Scene order: `MainMenu` → `VariableInput` → `SpaceSimulation` → `AtmosphereReached` → `EarthCollision`.
 
-### Making a Windows build
+### How to play
 
-1. **File → Build Settings**. Check that all six scenes are ticked, with `MainMenu` at index 0.
-2. Platform: **Windows, Mac, Linux**, Target Platform **Windows**, Architecture **x86_64**.
-3. Click **Build**, choose an empty folder (e.g. `Builds/`, which is gitignored), and run the `.exe` it creates.
+1. **Main menu → Start**, then enter the meteor's mass, density, specific heat capacity, surface condition factor and X/Y/Z start position, and press **Commence Simulation**.
+2. In space, pick the start mode (Classic NEA or Realistic entry with speed and angle) and a material in **Launch settings**, then press **Launch** (or Space).
+3. Use `+` / `-` for time warp, `1`-`3` for cameras and the wind compass in the atmosphere. The run ends in an impact, an airburst or the meteor burning up, then the results screen opens (tabs `1`-`4`).
+
+### Making a Windows build by hand
+
+`run.bat` does this for you. From the editor: **Tools → Meteor Simulator → Build Windows player**, or from a terminal:
+
+```powershell
+& "C:\Program Files\Unity\Hub\Editor\2022.3.7f1\Editor\Unity.exe" -batchmode -quit -projectPath . -executeMethod MTS.Launcher.Launcher.BuildWindows -logFile build.log
+```
 
 ## Getting an API key
 
@@ -113,12 +139,13 @@ Assets/Scripts/Space/        Space-stage adapter (Meteor_Force.cs)
 Assets/Scripts/Atmosphere/   Atmosphere-stage adapter (AtmosphereForce.cs)
 Assets/Scripts/UI/           Runtime HUD: flight data, launch panel, time warp, wind compass, toasts
 Assets/Scripts/Results/      Results screen: summary, geodesic map rings, charts, geocoding (MTS.Results)
-Assets/Editor/               Builders for the HUD prefabs and results scene, screenshot tools
+Assets/Editor/               Launcher (build / play entry points), HUD and results builders, screenshot tools
 Assets/Scripts/Inputs/       Range-checked user inputs
 Assets/Scripts/Main menu/    Scene navigation and info links
 Assets/Tests/EditMode/       Unit tests (physics, HUD formatting and controls, results maths)
 Assets/Scenes/               The six scenes
 docs/PHYSICS.md              The physics model, equations and references
+run.bat, run.ps1              One-click build-and-play entry point (Windows)
 ```
 
 ## Running the tests
