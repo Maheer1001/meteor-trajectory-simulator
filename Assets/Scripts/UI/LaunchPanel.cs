@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Globalization;
 using MTS.Core;
 using MTS.Core.Display;
@@ -9,10 +8,11 @@ using UnityEngine.UI;
 namespace MTS.Hud
 {
     /// <summary>
-    /// Space-stage launch settings: start mode (classic NEA / realistic entry), entry speed and angle, and the
-    /// meteoroid material (custom from the input screen, a preset, or a two-component mix).
+    /// Space-stage launch settings: start mode (from rest / inbound entry) with the entry speed and angle, and a
+    /// read-only summary of the meteoroid (composition, mass, diameter) chosen on the input screen.
     /// Every change is written straight to <see cref="SimulationSession"/>; it takes effect when the run is
-    /// (re)launched, because the session only reads these settings when a run begins.
+    /// (re)launched, because the session only reads these settings when a run begins. The panel reads the session
+    /// on every refresh, so presets applied elsewhere (the input screen's scenarios) show up as soon as it opens.
     /// </summary>
     public sealed class LaunchPanel : MonoBehaviour
     {
@@ -20,6 +20,7 @@ namespace MTS.Hud
         public const float MaxEntrySpeedKms = 72f;
         public const float MinEntryAngle = 5f;
         public const float MaxEntryAngle = 90f;
+        public const int MaxCompositionLines = MeteorComposition.MaxComponents;
 
         [Header("Collapse")]
         public Button collapseButton;
@@ -27,28 +28,22 @@ namespace MTS.Hud
         public GameObject body;
 
         [Header("Mode")]
-        public Button classicButton;
-        public Button realisticButton;
-        public GameObject realisticRows;
+        public Button fromRestButton;
+        public Button inboundButton;
+        public GameObject inboundRows;
         public Slider speedSlider;
         public TMP_Text speedValue;
         public Slider angleSlider;
         public TMP_Text angleValue;
 
-        [Header("Material")]
-        public Button materialPrev;
-        public Button materialNext;
-        public TMP_Text materialName;
-        public TMP_Text materialInfo;
-        public GameObject mixRows;
-        public Button mixAPrev;
-        public Button mixANext;
-        public TMP_Text mixAName;
-        public Button mixBPrev;
-        public Button mixBNext;
-        public TMP_Text mixBName;
-        public Slider mixSlider;
-        public TMP_Text mixValue;
+        [Header("Meteoroid (read-only, from the input screen)")]
+        public GameObject[] compositionLines = new GameObject[MaxCompositionLines];
+        public Image[] compositionSwatches = new Image[MaxCompositionLines];
+        public TMP_Text[] compositionTexts = new TMP_Text[MaxCompositionLines];
+        public TMP_Text massValue;
+        public TMP_Text diameterValue;
+        public GameObject energyRow;
+        public TMP_Text energyValue;
 
         [Header("Launch")]
         public Button launchButton;
@@ -58,40 +53,57 @@ namespace MTS.Hud
         /// <summary>Raised when the user presses Launch / Relaunch.</summary>
         public event System.Action LaunchRequested;
 
-        // Material choice: 0 = custom (inputs), 1..n = presets, n+1 = mix. Kept static so it survives scene loads.
-        private static int materialChoice = -1;
-        private static int mixA;
-        private static int mixB = 3;
-        private static float mixFractionA = 0.5f;
         private static bool settingsChanged;
-
         private bool refreshing;
-
-        private static int PresetCount => MeteorMaterialPresets.All.Count;
-        private static int MixChoice => PresetCount + 1;
 
         /// <summary>True when the settings differ from those of the current run (a relaunch would apply them).</summary>
         public static bool SettingsChanged => settingsChanged;
 
         public bool Expanded => body == null || body.activeSelf;
 
+        /// <summary>Mass the next run will start with (kg): the input screen's value, or the default when unset.</summary>
+        public static double InputMass
+        {
+            get
+            {
+                double m = MassRangeInput.Mass;
+                return m > 0 && !double.IsInfinity(m) ? m : MeteorProperties.DefaultMass;
+            }
+        }
+
+        /// <summary>Diameter (m) of a sphere of the given mass and bulk density.</summary>
+        public static double SphereDiameter(double mass, double density) =>
+            density > 0 ? 2.0 * System.Math.Pow(3.0 * mass / (4.0 * System.Math.PI * density), 1.0 / 3.0) : double.NaN;
+
+        /// <summary>One composition line, e.g. "70% Iron (Fe-Ni)".</summary>
+        public static string PartLabel(CompositionPart part) =>
+            System.Math.Round(part.Fraction * 100.0).ToString(CultureInfo.InvariantCulture) + "% " + part.Material.Name;
+
+        /// <summary>Material name without the parenthesised detail ("Iron (Fe-Ni)" becomes "Iron").</summary>
+        public static string ShortName(MeteorMaterial m)
+        {
+            int paren = m.Name.IndexOf(" (", System.StringComparison.Ordinal);
+            return paren > 0 ? m.Name.Substring(0, paren) : m.Name;
+        }
+
+        /// <summary>One-line composition for narrow places: the name, "70% Iron + 30% Stony", or "Mix of 4 materials".</summary>
+        public static string ShortComposition(MeteorComposition c)
+        {
+            if (c == null) return "";
+            if (c.Parts.Count == 1) return ShortName(c.Parts[0].Material);
+            if (c.Parts.Count > 2) return "Mix of " + c.Parts.Count + " materials";
+            return System.Math.Round(c.Parts[0].Fraction * 100.0).ToString(CultureInfo.InvariantCulture) + "% " + ShortName(c.Parts[0].Material) + " + " +
+                   System.Math.Round(c.Parts[1].Fraction * 100.0).ToString(CultureInfo.InvariantCulture) + "% " + ShortName(c.Parts[1].Material);
+        }
+
+        /// <summary>The start mode as the user calls it.</summary>
+        public static string ModeName(EntryMode mode) => mode == EntryMode.Inbound ? "Inbound entry" : "From rest";
+
         private void Start()
         {
-            SimulationSession session = SimulationSession.Instance;
-            if (materialChoice < 0)
-            {
-                materialChoice = ChoiceFor(session.MaterialPreset);
-            }
-
             Hook(collapseButton, () => SetExpanded(!Expanded));
-            Hook(classicButton, () => SetMode(EntryMode.FromRest));
-            Hook(realisticButton, () => SetMode(EntryMode.Inbound));
-            Hook(materialPrev, () => StepMaterial(-1));
-            Hook(materialNext, () => StepMaterial(+1));
-            Hook(mixAPrev, () => { mixA = Wrap(mixA - 1, PresetCount); ApplyMaterial(); });
-            Hook(mixANext, () => { mixA = Wrap(mixA + 1, PresetCount); ApplyMaterial(); });
-            Hook(mixBPrev, () => { mixB = Wrap(mixB - 1, PresetCount); ApplyMaterial(); });
-            Hook(mixBNext, () => { mixB = Wrap(mixB + 1, PresetCount); ApplyMaterial(); });
+            Hook(fromRestButton, () => SetMode(EntryMode.FromRest));
+            Hook(inboundButton, () => SetMode(EntryMode.Inbound));
             Hook(launchButton, () => LaunchRequested?.Invoke());
 
             if (speedSlider != null)
@@ -118,20 +130,10 @@ namespace MTS.Hud
                 });
             }
 
-            if (mixSlider != null)
-            {
-                mixSlider.minValue = 0;
-                mixSlider.maxValue = 100;
-                mixSlider.onValueChanged.AddListener(v =>
-                {
-                    if (refreshing) return;
-                    mixFractionA = v / 100f;
-                    ApplyMaterial();
-                });
-            }
-
             Refresh();
         }
+
+        private void OnEnable() => Refresh();
 
         /// <summary>Call after a launch: the session now runs with the panel's settings.</summary>
         public static void MarkApplied() => settingsChanged = false;
@@ -150,45 +152,6 @@ namespace MTS.Hud
             MarkChanged();
         }
 
-        private void StepMaterial(int delta)
-        {
-            materialChoice = Wrap(materialChoice + delta, PresetCount + 2);
-            ApplyMaterial();
-        }
-
-        /// <summary>Selects a material by choice index (0 custom, 1..4 presets, 5 mix). Used by tools and tests.</summary>
-        public void SelectMaterial(int choice)
-        {
-            materialChoice = Wrap(choice, PresetCount + 2);
-            ApplyMaterial();
-        }
-
-        private void ApplyMaterial()
-        {
-            SimulationSession.Instance.MaterialPreset = BuildMaterial();
-            MarkChanged();
-        }
-
-        private static MeteorMaterial BuildMaterial()
-        {
-            if (materialChoice <= 0) return null;
-            if (materialChoice <= PresetCount) return MeteorMaterialPresets.All[materialChoice - 1].Material;
-            MeteorMaterial a = MeteorMaterialPresets.All[mixA].Material;
-            MeteorMaterial b = MeteorMaterialPresets.All[mixB].Material;
-            return MeteorMaterialPresets.Mix(new List<(MeteorMaterial, double)> { (a, mixFractionA), (b, 1.0 - mixFractionA) });
-        }
-
-        private static int ChoiceFor(MeteorMaterial material)
-        {
-            if (material == null) return 0;
-            for (int i = 0; i < PresetCount; i++)
-            {
-                if (ReferenceEquals(MeteorMaterialPresets.All[i].Material, material)) return i + 1;
-            }
-
-            return MixChoice;
-        }
-
         private void MarkChanged()
         {
             settingsChanged = true;
@@ -200,12 +163,11 @@ namespace MTS.Hud
         {
             refreshing = true;
             SimulationSession session = SimulationSession.Instance;
-            bool realistic = session.Mode == EntryMode.Inbound;
-            CultureInfo ci = CultureInfo.InvariantCulture;
+            bool inbound = session.Mode == EntryMode.Inbound;
 
-            SetSelected(classicButton, !realistic);
-            SetSelected(realisticButton, realistic);
-            if (realisticRows != null) realisticRows.SetActive(realistic);
+            SetSelected(fromRestButton, !inbound);
+            SetSelected(inboundButton, inbound);
+            if (inboundRows != null) inboundRows.SetActive(inbound);
 
             float speedKms = Mathf.Clamp((float)(session.EntrySpeed / 1000.0), MinEntrySpeedKms, MaxEntrySpeedKms);
             if (speedSlider != null) speedSlider.SetValueWithoutNotify(speedKms);
@@ -214,32 +176,26 @@ namespace MTS.Hud
             if (angleSlider != null) angleSlider.SetValueWithoutNotify(angle);
             if (angleValue != null) angleValue.text = UnitFormat.Angle(session.EntryAngleDegrees) + (angle >= 89.5f ? " (vertical)" : "");
 
-            if (materialChoice < 0) materialChoice = ChoiceFor(session.MaterialPreset);
-            bool mix = materialChoice == MixChoice;
-            if (mixRows != null) mixRows.SetActive(mix);
-            if (materialName != null)
+            MeteorComposition composition = session.Composition;
+            for (int i = 0; i < MaxCompositionLines; i++)
             {
-                materialName.text = materialChoice == 0 ? "Custom (from inputs)"
-                    : mix ? "Two-material mix"
-                    : MeteorMaterialPresets.All[materialChoice - 1].Material.Name;
+                bool used = composition != null && i < composition.Parts.Count;
+                if (compositionLines != null && i < compositionLines.Length && compositionLines[i] != null) compositionLines[i].SetActive(used);
+                if (!used) continue;
+                CompositionPart part = composition.Parts[i];
+                if (compositionTexts != null && i < compositionTexts.Length && compositionTexts[i] != null) compositionTexts[i].text = PartLabel(part);
+                if (compositionSwatches != null && i < compositionSwatches.Length && compositionSwatches[i] != null)
+                {
+                    MaterialAppearance look = part.Material.Appearance;
+                    compositionSwatches[i].color = new Color(look.BaseR, look.BaseG, look.BaseB, 1f);
+                }
             }
 
-            if (mixAName != null) mixAName.text = ShortName(MeteorMaterialPresets.All[mixA].Material);
-            if (mixBName != null) mixBName.text = ShortName(MeteorMaterialPresets.All[mixB].Material);
-            if (mixSlider != null) mixSlider.SetValueWithoutNotify(mixFractionA * 100f);
-            if (mixValue != null)
-            {
-                mixValue.text = Mathf.RoundToInt(mixFractionA * 100f).ToString(ci) + " / " +
-                                Mathf.RoundToInt((1f - mixFractionA) * 100f).ToString(ci) + " %";
-            }
-
-            if (materialInfo != null)
-            {
-                MeteorMaterial m = session.MaterialPreset;
-                materialInfo.text = m == null
-                    ? "Density, SHC and SCF from the input screen"
-                    : "Density " + m.Density.ToString("N0", ci) + " kg/m³   Strength " + UnitFormat.Pressure(m.Strength);
-            }
+            double mass = InputMass;
+            if (massValue != null) massValue.text = UnitFormat.Mass(mass);
+            if (diameterValue != null) diameterValue.text = UnitFormat.Length(SphereDiameter(mass, composition != null ? composition.Material.Density : 0));
+            if (energyRow != null) energyRow.SetActive(inbound);
+            if (energyValue != null) energyValue.text = UnitFormat.Energy(0.5 * mass * session.EntrySpeed * session.EntrySpeed);
 
             bool waiting = SimulationClock.HoldForLaunch;
             if (launchLabel != null) launchLabel.text = waiting ? "LAUNCH" : "RELAUNCH";
@@ -250,23 +206,15 @@ namespace MTS.Hud
 
             if (hint != null)
             {
-                hint.text = waiting ? "Choose settings, then launch (Space)."
-                    : settingsChanged ? "Settings changed - relaunch to apply them."
-                    : "Relaunch restarts the run from the start point.";
+                hint.text = waiting ? "Choose a mode, then launch (Space)"
+                    : settingsChanged ? "Settings changed: relaunch to apply"
+                    : "Relaunch restarts from the start point";
                 hint.color = !waiting && settingsChanged ? HudTheme.Warning : HudTheme.Dim;
             }
 
-            if (collapseLabel != null) collapseLabel.text = Expanded ? "HIDE" : "SETTINGS";
+            if (collapseLabel != null) collapseLabel.text = Expanded ? "HIDE" : "SHOW";
             refreshing = false;
         }
-
-        private static string ShortName(MeteorMaterial m)
-        {
-            int paren = m.Name.IndexOf(" (", System.StringComparison.Ordinal);
-            return paren > 0 ? m.Name.Substring(0, paren) : m.Name;
-        }
-
-        private static int Wrap(int v, int n) => ((v % n) + n) % n;
 
         private static void Hook(Button b, UnityEngine.Events.UnityAction a)
         {

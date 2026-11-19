@@ -73,6 +73,15 @@ namespace MTS.Core.Tests
         }
 
         [Test]
+        public void HugeEventsReadAsTntEquivalent()
+        {
+            Assert.That(FlightEventDetector.ImpactMessage(1.25e15, 20000), Is.EqualTo("59.8 Tt TNT at 20.00 km/s"));
+            Assert.That(FlightEventDetector.ImpactMessage(0, 300), Is.EqualTo("Ground impact at 300 m/s"));
+            Assert.That(FlightEventDetector.AirburstMessage(27300, 500 * PhysicalConstants.JoulesPerKilotonTnt), Is.EqualTo("At 27.3 km, 500 kt TNT"));
+            Assert.That(FlightEventDetector.AirburstMessage(27300, 0), Is.EqualTo("At 27.3 km"));
+        }
+
+        [Test]
         public void EveryEventHasATitle()
         {
             foreach (FlightEvent e in System.Enum.GetValues(typeof(FlightEvent)))

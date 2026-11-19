@@ -6,7 +6,7 @@ using UnityEngine.UI;
 namespace MTS.Hud
 {
     /// <summary>
-    /// Hides the original NEA simulation UI at runtime so the new HUD can replace it without editing the scenes.
+    /// Hides the legacy in-scene simulation UI at runtime so the new HUD can replace it without editing the scenes.
     ///
     /// THE SINGLE LIST OF LEGACY UI (for deleting it from the scenes at integration time):
     ///

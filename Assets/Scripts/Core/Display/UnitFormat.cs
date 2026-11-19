@@ -39,7 +39,10 @@ namespace MTS.Core.Display
             return N(metresPerSecond / 1000.0, 2) + " km/s";
         }
 
-        /// <summary>Mass: kilograms below one tonne, tonnes above.</summary>
+        /// <summary>
+        /// Mass: kg below one tonne, t below 1,000 t, then kt, Mt and Gt with three significant figures
+        /// (Gt keeps growing with thousands separators, e.g. "1,250 Gt" for a Chicxulub-sized body).
+        /// </summary>
         public static string Mass(double kilograms)
         {
             if (Bad(kilograms)) return Missing;
@@ -49,11 +52,11 @@ namespace MTS.Core.Display
             double t = kilograms / 1000.0;
             double at = Math.Abs(t);
             if (at < 100.0) return N(t, 2) + " t";
-            if (at < 10000.0) return N(t, 1) + " t";
-            return N(t, 0) + " t";
+            if (at < 1000.0) return N(t, 1) + " t";
+            return Prefixed(t / 1000.0, MassPrefixes, "");
         }
 
-        /// <summary>Mass-loss rate: g/s below 1 kg/s, kg/s, t/s above 1 t/s.</summary>
+        /// <summary>Mass-loss rate: g/s below 1 kg/s, kg/s, then t/s, kt/s, Mt/s, Gt/s.</summary>
         public static string MassRate(double kilogramsPerSecond)
         {
             if (Bad(kilogramsPerSecond)) return Missing;
@@ -62,7 +65,26 @@ namespace MTS.Core.Display
             if (a < 1.0) return N(kilogramsPerSecond * 1000.0, a < 0.01 ? 2 : 0) + " g/s";
             if (a < 100.0) return N(kilogramsPerSecond, 1) + " kg/s";
             if (a < 1000.0) return N(kilogramsPerSecond, 0) + " kg/s";
-            return N(kilogramsPerSecond / 1000.0, 2) + " t/s";
+            return Prefixed(kilogramsPerSecond / 1000.0, TonnePrefixes, "/s");
+        }
+
+        /// <summary>
+        /// Energy as TNT equivalent (1 kt TNT = 4.184e12 J): t, kt, Mt, Gt, Tt TNT with three significant figures,
+        /// e.g. "500 kt TNT" (Chelyabinsk) or "59.8 Tt TNT" (Chicxulub).
+        /// </summary>
+        public static string Energy(double joules)
+        {
+            if (Bad(joules)) return Missing;
+            return TntKilotons(joules / PhysicalConstants.JoulesPerKilotonTnt);
+        }
+
+        /// <summary>Energy given in kilotons of TNT; see <see cref="Energy"/>.</summary>
+        public static string TntKilotons(double kilotons)
+        {
+            if (Bad(kilotons)) return Missing;
+            double tonnes = kilotons * 1000.0;
+            if (Math.Abs(tonnes) < 1.0) return "< 1 t TNT";
+            return Prefixed(tonnes, TonnePrefixes, " TNT");
         }
 
         /// <summary>Elapsed time: "12.3 s" below a minute, "h:mm:ss" below a day, "N d hh:mm:ss" above.</summary>
@@ -81,14 +103,15 @@ namespace MTS.Core.Display
             return sign + days.ToString("N0", Ci) + " d " + h.ToString("00", Ci) + ":" + m.ToString("00", Ci) + ":" + s.ToString("00", Ci);
         }
 
-        /// <summary>Pressure: Pa, kPa or MPa.</summary>
+        /// <summary>Pressure: Pa, kPa, MPa or GPa.</summary>
         public static string Pressure(double pascals)
         {
             if (Bad(pascals)) return Missing;
             double a = Math.Abs(pascals);
             if (a < 1000.0) return N(pascals, a < 10.0 ? 2 : 0) + " Pa";
             if (a < 1.0e6) return N(pascals / 1000.0, a < 1.0e5 ? 2 : 1) + " kPa";
-            return N(pascals / 1.0e6, 2) + " MPa";
+            if (a < 1.0e9) return N(pascals / 1.0e6, a < 1.0e8 ? 2 : 1) + " MPa";
+            return N(pascals / 1.0e9, a < 1.0e11 ? 2 : 1) + " GPa";
         }
 
         /// <summary>Acceleration in multiples of standard gravity.</summary>
@@ -103,22 +126,12 @@ namespace MTS.Core.Display
 
         public static string Mach(double mach) => Bad(mach) ? Missing : "Mach " + N(mach, mach < 10.0 ? 2 : 1);
 
-        /// <summary>Radiant power with an SI prefix and three significant figures (W, kW, MW, GW, TW).</summary>
+        /// <summary>Radiant power with an SI prefix and three significant figures (W, kW, MW, GW, TW, PW, EW, ZW, YW).</summary>
         public static string Power(double watts)
         {
             if (Bad(watts)) return Missing;
-            double a = Math.Abs(watts);
-            if (a < 1.0) return "0 W";
-            string[] prefixes = { "W", "kW", "MW", "GW", "TW", "PW" };
-            int i = 0;
-            double v = watts;
-            while (Math.Abs(v) >= 1000.0 && i < prefixes.Length - 1)
-            {
-                v /= 1000.0;
-                i++;
-            }
-
-            return ThreeSignificant(v) + " " + prefixes[i];
+            if (Math.Abs(watts) < 1.0) return "0 W";
+            return Prefixed(watts, PowerPrefixes, "");
         }
 
         /// <summary>Absolute magnitude with sign ("-12.4"); "not glowing" at or beyond the dark limit.</summary>
@@ -129,14 +142,17 @@ namespace MTS.Core.Display
             return (magnitude >= 0 ? "+" : "") + magnitude.ToString("0.0", Ci) + " mag";
         }
 
-        /// <summary>Length for object sizes: cm below 1 m, m below 10 km.</summary>
+        /// <summary>Length for object sizes: cm below 1 m, m below 1 km, km above ("1.25 km", "12.3 km").</summary>
         public static string Length(double metres)
         {
             if (Bad(metres)) return Missing;
             double a = Math.Abs(metres);
             if (a < 1.0) return N(metres * 100.0, 0) + " cm";
             if (a < 100.0) return N(metres, 2) + " m";
-            return Distance(metres);
+            if (a < 1000.0) return N(metres, 0) + " m";
+            double km = metres / 1000.0;
+            if (a < 1.0e4) return N(km, 2) + " km";
+            return N(km, a < 1.0e6 ? 1 : 0) + " km";
         }
 
         public static string Percent(double fraction, int decimals = 1) =>
@@ -155,11 +171,33 @@ namespace MTS.Core.Display
             return "x" + N(multiplier, 0);
         }
 
+        private static readonly string[] MassPrefixes = { "kt", "Mt", "Gt" };
+        private static readonly string[] TonnePrefixes = { "t", "kt", "Mt", "Gt", "Tt" };
+        private static readonly string[] PowerPrefixes = { "W", "kW", "MW", "GW", "TW", "PW", "EW", "ZW", "YW" };
+
+        /// <summary>
+        /// Divides by 1,000 until below 1,000 (or the last prefix) and prints three significant figures; the last
+        /// prefix keeps growing with thousands separators.
+        /// </summary>
+        private static string Prefixed(double value, string[] prefixes, string suffix)
+        {
+            int i = 0;
+            double v = value;
+            while (Math.Abs(v) >= 999.5 && i < prefixes.Length - 1)
+            {
+                v /= 1000.0;
+                i++;
+            }
+
+            string number = Math.Abs(v) >= 999.5 ? N(v, 0) : ThreeSignificant(v);
+            return number + " " + prefixes[i] + suffix;
+        }
+
         private static string ThreeSignificant(double v)
         {
             double a = Math.Abs(v);
-            if (a >= 100.0) return v.ToString("0", Ci);
-            if (a >= 10.0) return v.ToString("0.0", Ci);
+            if (a >= 99.95) return v.ToString("0", Ci);
+            if (a >= 9.995) return v.ToString("0.0", Ci);
             return v.ToString("0.00", Ci);
         }
     }

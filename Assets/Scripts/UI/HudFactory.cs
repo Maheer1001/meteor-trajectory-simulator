@@ -30,14 +30,20 @@ namespace MTS.Hud
     /// <summary>
     /// Builds the HUD hierarchy from code. Used by the editor prefab builder (Tools > HUD > Build HUD prefabs,
     /// which saves Resources/UI/SpaceHud and AtmosphereHud) and as a runtime fallback when a prefab is missing.
-    /// Layout is for a 1920x1080 reference canvas (Scale With Screen Size, match 0.5).
+    /// Layout is for a 1920x1080 reference canvas (Scale With Screen Size, match 0.5); sizes and spacing come from
+    /// <see cref="HudTheme"/>. Alignment: labels left and values right on a shared column, both
+    /// <see cref="HudTheme.RowInset"/> from the row edge; headings left with the same inset; centred text only on
+    /// buttons and the stage bar.
     /// </summary>
     public static class HudFactory
     {
         public const int UiLayer = 5;
-        public const float Margin = 24f;
-        public const float SidePanelWidth = 400f;
-        public const float RowHeight = 30f;
+        public const float Margin = HudTheme.ScreenMargin;
+        public const float SidePanelWidth = HudTheme.SidePanelWidth;
+        public const float RowHeight = HudTheme.RowHeight;
+
+        private const int Pad = HudTheme.PanelPadding;
+        private const float Inset = HudTheme.RowInset;
 
         private static HudAssets a;
 
@@ -74,8 +80,8 @@ namespace MTS.Hud
             hud.toasts = BuildToasts(content);
 
             // Outside the content group so it stays visible while the HUD is hidden.
-            TMP_Text hint = Text(root.transform, "HiddenHint", "Press H to show the HUD", a.LabelFont, 18, HudTheme.Dim, TextAlignmentOptions.BottomLeft);
-            Place(hint.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(Margin, Margin * 0.5f), new Vector2(400, 30));
+            TMP_Text hint = Text(root.transform, "HiddenHint", "Press H to show the HUD", a.LabelFont, HudTheme.LabelSize, HudTheme.Dim, TextAlignmentOptions.BottomLeft);
+            Place(hint.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(Margin, Margin * 0.5f), new Vector2(480, 36));
             hint.gameObject.SetActive(false);
             hud.hiddenHint = hint.gameObject;
 
@@ -89,11 +95,12 @@ namespace MTS.Hud
 
         private static void BuildTopBar(SimulationHud hud, RectTransform parent)
         {
-            RectTransform bar = Panel(parent, "StageBar", null, 860, new RectOffset(16, 16, 10, 10), 4);
-            Place(bar, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -16), new Vector2(860, 0));
+            const float width = 840f;
+            RectTransform bar = Panel(parent, "StageBar", null, width, new RectOffset(Pad, Pad, 10, 8), 4);
+            Place(bar, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -16), new Vector2(width, 0));
 
             RectTransform row = Rect("Stages", bar);
-            Layout(row, 44);
+            Layout(row, 50);
             var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
             hlg.spacing = 8;
             hlg.childAlignment = TextAnchor.MiddleLeft;
@@ -113,7 +120,7 @@ namespace MTS.Hud
             {
                 if (i > 0)
                 {
-                    TMP_Text arrow = Text(row, "Arrow", ">", a.DisplayFont, 26, HudTheme.Label, TextAlignmentOptions.Center);
+                    TMP_Text arrow = Text(row, "Arrow", ">", a.DisplayFont, HudTheme.ChipSize, HudTheme.Label, TextAlignmentOptions.Center);
                     Layout(arrow.rectTransform, -1, 20);
                 }
 
@@ -121,32 +128,38 @@ namespace MTS.Hud
                 Layout(chip, -1, i == 1 ? 210 : 150);
                 Image img = Sliced(chip.gameObject, a.Panel, HudTheme.ButtonOff, 14);
                 hud.stageChips[i] = img;
-                TMP_Text t = Text(chip, "Label", names[i], a.DisplayFont, 24, HudTheme.Dim, TextAlignmentOptions.Center);
+                TMP_Text t = Text(chip, "Label", names[i], a.DisplayFont, HudTheme.ChipSize, HudTheme.Dim, TextAlignmentOptions.Center);
                 Stretch(t.rectTransform);
                 hud.stageChipTexts[i] = t;
                 Tip(chip.gameObject, tips[i]);
             }
 
-            TMP_Text elapsed = Value(row, "Elapsed", "T+ --", 26, HudTheme.Value, TextAlignmentOptions.MidlineRight);
-            var le = Layout(elapsed.rectTransform, -1, 220);
+            TMP_Text elapsed = Value(row, "Elapsed", "T+ --", HudTheme.ValueSize, HudTheme.Value, TextAlignmentOptions.MidlineRight);
+            var le = Layout(elapsed.rectTransform, -1, 180);
             le.flexibleWidth = 1;
+            elapsed.margin = new Vector4(0, 0, Inset, 0);
             hud.elapsedValue = elapsed;
             Tip(elapsed.gameObject, "Simulated time since the start of the run (h:mm:ss; days when long).");
 
-            TMP_Text mode = Text(bar, "Mode", "", a.LabelFont, 17, HudTheme.Label, TextAlignmentOptions.Center);
-            Layout(mode.rectTransform, 24);
+            TMP_Text mode = Text(bar, "Mode", "", a.LabelFont, HudTheme.LabelSize, HudTheme.Label, TextAlignmentOptions.Center);
+            Layout(mode.rectTransform, 32);
+            AutoSize(mode, HudTheme.LabelSize, 18);
             hud.modeValue = mode;
         }
 
         private static void BuildFlightPanel(SimulationHud hud, RectTransform parent, HudStage stage)
         {
-            RectTransform panel = Panel(parent, "FlightPanel", "FLIGHT DATA", SidePanelWidth, new RectOffset(16, 16, 12, 14), 2);
+            RectTransform panel = Panel(parent, "FlightPanel", "FLIGHT DATA", SidePanelWidth, Padding(), HudTheme.RowSpacing);
             Place(panel, new Vector2(0, 1), new Vector2(0, 1), new Vector2(Margin, -Margin), new Vector2(SidePanelWidth, 0));
 
-            hud.altitudeValue = Row(panel, "Altitude", "Altitude", "Height above mean sea level (Earth radius 6,371 km).", 38, 30);
+            hud.altitudeValue = Row(panel, "Altitude", "Altitude", "Height above mean sea level (Earth radius 6,371 km).", 50, HudTheme.BigValueSize);
 
-            RectTransform barBack = Rect("AltitudeBar", panel);
-            Layout(barBack, 12);
+            RectTransform barHolder = Rect("AltitudeBarHolder", panel);
+            Layout(barHolder, 18);
+            RectTransform barBack = Rect("AltitudeBar", barHolder);
+            Stretch(barBack);
+            barBack.offsetMin = new Vector2(Inset, 3);
+            barBack.offsetMax = new Vector2(-Inset, -3);
             Sliced(barBack.gameObject, a.Panel, HudTheme.BarBack, 40);
             RectTransform fill = Rect("Fill", barBack);
             fill.anchorMin = Vector2.zero;
@@ -157,9 +170,10 @@ namespace MTS.Hud
             hud.altitudeBarFill = fill;
             Tip(barBack.gameObject, "Progress through this stage: start point to the 120 km entry interface in space, 120 km to the ground in the atmosphere.");
 
-            TMP_Text caption = Text(panel, "AltitudeCaption", "", a.LabelFont, 16, HudTheme.Dim, TextAlignmentOptions.MidlineLeft);
-            Layout(caption.rectTransform, 22);
-            caption.margin = new Vector4(8, 0, 0, 0);
+            TMP_Text caption = Text(panel, "AltitudeCaption", "", a.LabelFont, HudTheme.LabelSize, HudTheme.Dim, TextAlignmentOptions.MidlineLeft);
+            Layout(caption.rectTransform, 32);
+            caption.margin = new Vector4(Inset, 0, Inset, 0);
+            AutoSize(caption, HudTheme.LabelSize, HudTheme.MinAutoSize);
             hud.altitudeBarCaption = caption;
 
             hud.atmosphereDistanceValue = Row(panel, "ToAtmosphere", "To atmosphere", "Distance left to the 120 km atmospheric entry interface.");
@@ -168,8 +182,8 @@ namespace MTS.Hud
             hud.machValue = Row(panel, "Mach", "Mach", "Air speed divided by the local speed of sound (vacuum above 1,000 km).");
             hud.pressureValue = Row(panel, "DynamicPressure", "Ram pressure", "Dynamic pressure q = 1/2 rho v^2 on the front face. The body breaks up when rho v^2 (twice this value) exceeds the material strength.");
             hud.decelerationValue = Row(panel, "Deceleration", "Deceleration", "Drag deceleration in multiples of g (9.81 m/s^2), excluding gravity.");
-            hud.temperatureValue = Row(panel, "Temperature", "Surface temp.", "Temperature of the heated surface layer (kelvin).");
-            hud.massValue = Row(panel, "Mass", "Mass", "Remaining mass and the percentage of the starting mass left.");
+            hud.temperatureValue = Row(panel, "Temperature", "Surface temp", "Temperature of the heated surface layer (kelvin).");
+            hud.massValue = Row(panel, "Mass", "Mass", "Remaining mass (t = tonne, kt / Mt / Gt = thousand / million / billion tonnes) and the percentage of the starting mass left.");
             hud.massLossValue = Row(panel, "MassLoss", "Ablation", "Mass vaporised per second by atmospheric heating.");
             hud.brightnessValue = Row(panel, "Brightness", "Brightness", "Visible light power and absolute magnitude (as seen from 100 km). Lower magnitude = brighter; -4 is as bright as Venus.");
             hud.diameterValue = Row(panel, "Diameter", "Diameter", "Size of the body: equal-mass sphere while intact, spreading fragment cloud after break-up.");
@@ -183,15 +197,14 @@ namespace MTS.Hud
 
         private static LaunchPanel BuildLaunchPanel(RectTransform parent)
         {
-            const float width = 420f;
-            RectTransform panel = Panel(parent, "LaunchPanel", "LAUNCH SETTINGS", width, new RectOffset(16, 16, 12, 14), 6);
-            Place(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-Margin, -Margin), new Vector2(width, 0));
+            RectTransform panel = Panel(parent, "LaunchPanel", "LAUNCH", SidePanelWidth, Padding(), 6);
+            Place(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-Margin, -Margin), new Vector2(SidePanelWidth, 0));
             LaunchPanel lp = panel.gameObject.AddComponent<LaunchPanel>();
 
-            // Collapse toggle sits in the header.
+            // Collapse toggle sits at the right of the header.
             Transform header = panel.Find("Header");
-            Button collapse = MakeButton(header, "Collapse", "HIDE", 110, 30, 16, out TMP_Text collapseLabel);
-            Place((RectTransform)collapse.transform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-6, 0), new Vector2(110, 30));
+            Button collapse = MakeButton(header, "Collapse", "HIDE", 120, 36, 22, out TMP_Text collapseLabel);
+            Place((RectTransform)collapse.transform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-6, 0), new Vector2(120, 36));
             ((RectTransform)collapse.transform).pivot = new Vector2(1, 0.5f);
             lp.collapseButton = collapse;
             lp.collapseLabel = collapseLabel;
@@ -202,76 +215,112 @@ namespace MTS.Hud
             lp.body = body.gameObject;
 
             Caption(body, "Start mode");
-            RectTransform modes = HRow(body, "Modes", 44, 8);
-            lp.classicButton = MakeButton(modes, "Classic", "CLASSIC NEA", -1, 44, 20, out _, flexible: true);
-            lp.realisticButton = MakeButton(modes, "Realistic", "REALISTIC ENTRY", -1, 44, 20, out _, flexible: true);
-            Tip(lp.classicButton.gameObject, "Classic NEA: the meteor is released from rest at the input coordinates and falls under gravity.");
-            Tip(lp.realisticButton.gameObject, "Realistic entry: the meteor is launched on a path that reaches the atmosphere (120 km) at the chosen speed and angle.");
+            RectTransform modes = HRow(body, "Modes", 52, 8);
+            lp.fromRestButton = MakeButton(modes, "FromRest", "FROM REST", -1, 52, 24, out _, flexible: true);
+            lp.inboundButton = MakeButton(modes, "Inbound", "INBOUND ENTRY", -1, 52, 24, out _, flexible: true);
+            Tip(lp.fromRestButton.gameObject, "From rest: the meteor is released at rest at the start coordinates and falls towards the Earth under gravity.");
+            Tip(lp.inboundButton.gameObject, "Inbound entry: the meteor arrives at the entry interface (120 km) with the chosen entry speed and angle.");
 
-            RectTransform realistic = Rect("RealisticRows", body);
-            Column(realistic, 4);
-            lp.realisticRows = realistic.gameObject;
-            lp.speedSlider = LabelledSlider(realistic, "EntrySpeed", "Entry speed", out lp.speedValue,
-                "Speed at the top of the atmosphere. Real meteoroids arrive at 11 to 72 km/s.");
-            lp.angleSlider = LabelledSlider(realistic, "EntryAngle", "Entry angle", out lp.angleValue,
+            RectTransform inbound = Rect("InboundRows", body);
+            Column(inbound, 4);
+            lp.inboundRows = inbound.gameObject;
+            lp.speedSlider = LabelledSlider(inbound, "EntrySpeed", "Entry speed", out lp.speedValue,
+                "Speed at the top of the atmosphere (120 km). Real meteoroids arrive at 11 to 72 km/s.");
+            lp.angleSlider = LabelledSlider(inbound, "EntryAngle", "Entry angle", out lp.angleValue,
                 "Angle below the horizontal at 120 km. 90 degrees is straight down; shallow entries travel further and slow more.");
 
-            Caption(body, "Material");
-            Cycler(body, "Material", 44, out lp.materialPrev, out lp.materialName, out lp.materialNext,
-                "Composition. Custom uses the density, SHC and SCF from the input screen; presets use typical meteorite values.");
-            TMP_Text info = Text(body, "MaterialInfo", "", a.LabelFont, 16, HudTheme.Dim, TextAlignmentOptions.Center);
-            Layout(info.rectTransform, 22);
-            lp.materialInfo = info;
+            Caption(body, "Meteoroid");
+            RectTransform comp = Rect("Composition", body);
+            Column(comp, 0);
+            comp.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, 0);
+            Tip(comp.gameObject, "Composition by mass, with the colour of each material. Set on the input screen.");
+            lp.compositionLines = new GameObject[LaunchPanel.MaxCompositionLines];
+            lp.compositionSwatches = new Image[LaunchPanel.MaxCompositionLines];
+            lp.compositionTexts = new TMP_Text[LaunchPanel.MaxCompositionLines];
+            for (int i = 0; i < LaunchPanel.MaxCompositionLines; i++)
+            {
+                RectTransform line = Rect("Part " + (i + 1), comp);
+                Layout(line, 34);
+                // Light frame behind the colour square so dark materials stay visible on the red panel.
+                RectTransform frame = Rect("Frame", line);
+                frame.anchorMin = frame.anchorMax = new Vector2(0, 0.5f);
+                frame.pivot = new Vector2(0, 0.5f);
+                frame.anchoredPosition = new Vector2(Inset - 2, 0);
+                frame.sizeDelta = new Vector2(26, 26);
+                Image fi = frame.gameObject.AddComponent<Image>();
+                fi.color = new Color(1f, 1f, 1f, 0.6f);
+                fi.raycastTarget = false;
+                RectTransform swatch = Rect("Swatch", line);
+                swatch.anchorMin = swatch.anchorMax = new Vector2(0, 0.5f);
+                swatch.pivot = new Vector2(0, 0.5f);
+                swatch.anchoredPosition = new Vector2(Inset, 0);
+                swatch.sizeDelta = new Vector2(22, 22);
+                Image sw = swatch.gameObject.AddComponent<Image>();
+                sw.color = Color.grey;
+                sw.raycastTarget = false;
+                TMP_Text t = Text(line, "Text", "", a.LabelFont, HudTheme.LabelSize, HudTheme.Value, TextAlignmentOptions.MidlineLeft);
+                Stretch(t.rectTransform);
+                t.rectTransform.offsetMin = new Vector2(Inset + 22 + 12, 0);
+                t.rectTransform.offsetMax = new Vector2(-Inset, 0);
+                AutoSize(t, HudTheme.LabelSize, 18);
+                lp.compositionLines[i] = line.gameObject;
+                lp.compositionSwatches[i] = sw;
+                lp.compositionTexts[i] = t;
+            }
 
-            RectTransform mix = Rect("MixRows", body);
-            Column(mix, 4);
-            lp.mixRows = mix.gameObject;
-            Cycler(mix, "MixA", 36, out lp.mixAPrev, out lp.mixAName, out lp.mixANext, "First component of the mix.");
-            Cycler(mix, "MixB", 36, out lp.mixBPrev, out lp.mixBName, out lp.mixBNext, "Second component of the mix.");
-            lp.mixSlider = LabelledSlider(mix, "MixFraction", "Mass fraction", out lp.mixValue,
-                "Mass percentage of the first / second component. Density mixes by volume, strength geometrically.");
+            lp.massValue = Row(body, "Mass", "Mass", "Starting mass (t = tonne, kt / Mt / Gt = thousand / million / billion tonnes).");
+            lp.diameterValue = Row(body, "Diameter", "Diameter", "Diameter of a sphere with this mass and the composition's bulk density.");
+            lp.energyValue = Row(body, "Energy", "Energy", "Kinetic energy at the entry speed, as TNT equivalent (1 kt TNT = 4.184e12 J).");
+            lp.energyRow = lp.energyValue.transform.parent.gameObject;
+            TMP_Text source = Text(body, "InputHint", "Set on the input screen", a.LabelFont, HudTheme.LabelSize, HudTheme.Dim, TextAlignmentOptions.MidlineLeft);
+            Layout(source.rectTransform, 30);
+            source.margin = new Vector4(Inset, 0, Inset, 0);
+            source.fontStyle = FontStyles.Italic;
 
             RectTransform spacer = Rect("Spacer", body);
-            Layout(spacer, 6);
-            lp.launchButton = MakeButton(body, "Launch", "LAUNCH", -1, 56, 30, out lp.launchLabel);
+            Layout(spacer, 4);
+            lp.launchButton = MakeButton(body, "Launch", "LAUNCH", -1, 60, 32, out lp.launchLabel);
             Tip(lp.launchButton.gameObject, "Start a new run with these settings from the start point (Space bar).");
-            TMP_Text hint = Text(body, "Hint", "", a.LabelFont, 16, HudTheme.Dim, TextAlignmentOptions.Center);
-            Layout(hint.rectTransform, 22);
+            TMP_Text hint = Text(body, "Hint", "", a.LabelFont, HudTheme.LabelSize, HudTheme.Dim, TextAlignmentOptions.MidlineLeft);
+            Layout(hint.rectTransform, 30);
+            hint.margin = new Vector4(Inset, 0, Inset, 0);
+            AutoSize(hint, HudTheme.LabelSize, HudTheme.MinAutoSize);
             lp.hint = hint;
             return lp;
         }
 
         private static WindCompass BuildWindPanel(RectTransform parent)
         {
-            const float width = 360f;
-            RectTransform panel = Panel(parent, "WindPanel", "WIND", width, new RectOffset(16, 16, 12, 14), 6);
+            const float width = SidePanelWidth;
+            const float size = 240f;
+            const float r = size * 0.5f;
+            RectTransform panel = Panel(parent, "WindPanel", "WIND", width, Padding(), 6);
             Place(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-Margin, -Margin), new Vector2(width, 0));
             WindCompass wc = panel.gameObject.AddComponent<WindCompass>();
 
             RectTransform holder = Rect("CompassHolder", panel);
-            Layout(holder, 260);
+            Layout(holder, size + 84);
             RectTransform area = Rect("Compass", holder);
-            Place(area, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(220, 220));
-            Image disc = Simple(area.gameObject, a.Disc, new Color(0.08f, 0f, 0f, 0.75f));
+            Place(area, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(size, size));
+            Image disc = Simple(area.gameObject, a.Disc, new Color(0.08f, 0f, 0f, 0.8f));
             disc.raycastTarget = true;
             RectTransform ring = Rect("Ring", area);
             Stretch(ring);
             Simple(ring.gameObject, a.Ring, HudTheme.PanelOutline).raycastTarget = false;
             RectTransform half = Rect("HalfRing", area);
-            Place(half, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(110, 110));
+            Place(half, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(r, r));
             Simple(half.gameObject, a.Ring, new Color(1f, 0.3f, 0.2f, 0.45f)).raycastTarget = false;
-            Line(area, "AxisNS", new Vector2(2, 220), new Color(1, 1, 1, 0.18f));
-            Line(area, "AxisEW", new Vector2(220, 2), new Color(1, 1, 1, 0.18f));
-            CompassLabel(area, "N", new Vector2(0, 126));
-            CompassLabel(area, "S", new Vector2(0, -126));
-            CompassLabel(area, "E", new Vector2(126, 0));
-            CompassLabel(area, "W", new Vector2(-126, 0));
-            TMP_Text scale = Text(area, "Scale", "50", a.LabelFont, 13, HudTheme.Dim, TextAlignmentOptions.Center);
-            Place(scale.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(48, -48), new Vector2(40, 18));
-            scale.raycastTarget = false;
-            TMP_Text scaleMax = Text(area, "ScaleMax", "100 m/s", a.LabelFont, 13, HudTheme.Dim, TextAlignmentOptions.Center);
-            Place(scaleMax.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(96, -92), new Vector2(70, 18));
-            scaleMax.raycastTarget = false;
+            Line(area, "AxisNS", new Vector2(2, size), new Color(1, 1, 1, 0.18f));
+            Line(area, "AxisEW", new Vector2(size, 2), new Color(1, 1, 1, 0.18f));
+            // Cardinal letters sit symmetrically just outside the ring, centred on their axis.
+            const float letter = r + 22f;
+            CompassLabel(area, "N", new Vector2(0, letter));
+            CompassLabel(area, "S", new Vector2(0, -letter));
+            CompassLabel(area, "E", new Vector2(letter, 0));
+            CompassLabel(area, "W", new Vector2(-letter, 0));
+            // Speed scale on the south-east diagonal, left-aligned just outside each ring.
+            ScaleLabel(area, "Scale", "50", r * 0.5f);
+            ScaleLabel(area, "ScaleMax", "100 m/s", r);
 
             RectTransform needle = Rect("Needle", area);
             needle.anchorMin = needle.anchorMax = new Vector2(0.5f, 0.5f);
@@ -283,7 +332,7 @@ namespace MTS.Hud
             ni.raycastTarget = false;
 
             RectTransform knob = Rect("Knob", area);
-            Place(knob, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(26, 26));
+            Place(knob, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(28, 28));
             Simple(knob.gameObject, a.Disc, Color.white).raycastTarget = false;
 
             wc.area = area;
@@ -291,13 +340,11 @@ namespace MTS.Hud
             wc.knob = knob;
             Tip(area.gameObject, "Drag to set the wind: direction = where the air blows towards (north up), distance from the centre = speed (edge = 100 m/s). Wind acts below 86 km.");
 
-            TMP_Text readout = Value(panel, "Readout", "", 20, HudTheme.Value, TextAlignmentOptions.Center);
-            Layout(readout.rectTransform, 30);
-            wc.readout = readout;
+            wc.readout = Row(panel, "Readout", "Wind", "Wind speed and the compass bearing the air blows towards.");
 
-            RectTransform buttons = HRow(panel, "Buttons", 38, 8);
-            wc.calmButton = MakeButton(buttons, "Calm", "CALM", -1, 38, 18, out _, flexible: true);
-            wc.resetButton = MakeButton(buttons, "Reset", "DEFAULT 15 M/S E", -1, 38, 18, out _, flexible: true);
+            RectTransform buttons = HRow(panel, "Buttons", 46, 8);
+            wc.calmButton = MakeButton(buttons, "Calm", "CALM", -1, 46, 22, out _, flexible: true);
+            wc.resetButton = MakeButton(buttons, "Reset", "DEFAULT", -1, 46, 22, out _, flexible: true);
             Tip(wc.calmButton.gameObject, "No wind.");
             Tip(wc.resetButton.gameObject, "Back to the default wind: 15 m/s towards the east.");
             return wc;
@@ -305,41 +352,48 @@ namespace MTS.Hud
 
         private static void BuildTimeBar(SimulationHud hud, RectTransform parent)
         {
-            const float width = 980f;
-            RectTransform bar = Panel(parent, "TimeBar", null, width, new RectOffset(16, 16, 10, 8), 4);
+            const float width = 1200f;
+            RectTransform bar = Panel(parent, "TimeBar", null, width, new RectOffset(Pad, Pad, 12, 8), 6);
             Place(bar, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(width, 0));
             bar.pivot = new Vector2(0.5f, 0);
 
-            RectTransform row = HRow(bar, "Controls", 64, 10);
-            hud.warpDownButton = MakeButton(row, "WarpDown", "-", 64, 64, 40, out _);
-            hud.pauseButton = MakeButton(row, "PausePlay", "PAUSE", 210, 64, 32, out hud.pauseLabel);
-            hud.warpUpButton = MakeButton(row, "WarpUp", "+", 64, 64, 40, out _);
+            RectTransform row = HRow(bar, "Controls", 66, 10);
+            hud.warpDownButton = MakeButton(row, "WarpDown", "-", 66, 66, 40, out _);
+            hud.pauseButton = MakeButton(row, "PausePlay", "PAUSE", 220, 66, 32, out hud.pauseLabel);
+            hud.warpUpButton = MakeButton(row, "WarpUp", "+", 66, 66, 40, out _);
             Tip(hud.warpDownButton.gameObject, "Slower time warp (- key).");
             Tip(hud.warpUpButton.gameObject, "Faster time warp (+ key).");
             Tip(hud.pauseButton.gameObject, "Pause / play (Space bar). Launches the run while it is waiting on the launch panel.");
 
+            // Warp readout: both lines left-aligned on the same inset.
             RectTransform warp = Rect("Warp", row);
-            var le = Layout(warp, 64, 420);
+            var le = Layout(warp, 66, 420);
             le.flexibleWidth = 1;
-            Column(warp, 0);
-            hud.warpValue = Text(warp, "WarpValue", "real x1", a.DisplayFont, 30, HudTheme.Value, TextAlignmentOptions.MidlineLeft);
+            warp.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, 0);
+            VerticalLayoutGroup wv = Column(warp, 0);
+            wv.padding = new RectOffset((int)Inset, (int)Inset, 0, 0);
+            wv.childAlignment = TextAnchor.MiddleLeft;
+            hud.warpValue = Text(warp, "WarpValue", "real x1", a.DisplayFont, 32, HudTheme.Value, TextAlignmentOptions.MidlineLeft);
             Layout(hud.warpValue.rectTransform, 36);
-            hud.warpStatus = Text(warp, "WarpStatus", "", a.LabelFont, 18, HudTheme.Dim, TextAlignmentOptions.MidlineLeft);
-            Layout(hud.warpStatus.rectTransform, 24);
+            hud.warpStatus = Text(warp, "WarpStatus", "", a.LabelFont, HudTheme.LabelSize, HudTheme.Dim, TextAlignmentOptions.MidlineLeft);
+            Layout(hud.warpStatus.rectTransform, 30);
+            AutoSize(hud.warpStatus, HudTheme.LabelSize, 18);
             Tip(warp.gameObject, "Time warp: simulated seconds per real second. The physics step stays the same; faster warp takes more steps per frame. 'STEP CAP' means the computer cannot keep up and the actual rate is lower.");
 
-            hud.menuButton = MakeButton(row, "Menu", "MENU", 130, 64, 26, out _);
+            hud.menuButton = MakeButton(row, "Menu", "MENU", 140, 66, 28, out _);
             Tip(hud.menuButton.gameObject, "Pause and open the simulation menu (Esc).");
 
-            TMP_Text legend = Text(bar, "Legend", "", a.LabelFont, 17, HudTheme.Label, TextAlignmentOptions.Center);
-            Layout(legend.rectTransform, 24);
+            // Shortcut legend, left-aligned with the left edge of the buttons above.
+            TMP_Text legend = Text(bar, "Legend", "", a.LabelFont, HudTheme.LegendSize, HudTheme.Label, TextAlignmentOptions.MidlineLeft);
+            Layout(legend.rectTransform, 30);
             hud.legendText = legend;
         }
 
         private static ToastFeed BuildToasts(RectTransform parent)
         {
+            const float width = 620f;
             RectTransform area = Rect("Toasts", parent);
-            Place(area, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -128), new Vector2(520, 0));
+            Place(area, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -150), new Vector2(width, 0));
             area.pivot = new Vector2(0.5f, 1);
             Column(area, 8);
             var fitter = area.gameObject.AddComponent<ContentSizeFitter>();
@@ -348,11 +402,11 @@ namespace MTS.Hud
             feed.container = area;
 
             RectTransform card = Rect("ToastTemplate", area);
-            Background(card, a.Panel, new Color(0.1f, 0f, 0f, 0.82f), 16);
+            Background(card, a.Panel, new Color(0.09f, 0f, 0f, 0.93f), 16);
             card.gameObject.AddComponent<CanvasGroup>();
             var vlg = card.gameObject.AddComponent<VerticalLayoutGroup>();
-            vlg.padding = new RectOffset(26, 16, 8, 10);
-            vlg.spacing = 0;
+            vlg.padding = new RectOffset(34, Pad, 10, 12);
+            vlg.spacing = 2;
             vlg.childControlHeight = true;
             vlg.childControlWidth = true;
             vlg.childForceExpandHeight = false;
@@ -361,13 +415,14 @@ namespace MTS.Hud
             accent.anchorMin = new Vector2(0, 0);
             accent.anchorMax = new Vector2(0, 1);
             accent.pivot = new Vector2(0, 0.5f);
-            accent.offsetMin = new Vector2(8, 8);
-            accent.offsetMax = new Vector2(16, -8);
+            accent.offsetMin = new Vector2(12, 10);
+            accent.offsetMax = new Vector2(20, -10);
             accent.gameObject.AddComponent<Image>().color = HudTheme.Info;
-            TMP_Text title = Text(card, "Title", "EVENT", a.DisplayFont, 28, HudTheme.Info, TextAlignmentOptions.MidlineLeft);
-            Layout(title.rectTransform, 34);
-            TMP_Text message = Text(card, "Message", "", a.LabelFont, 18, HudTheme.Value, TextAlignmentOptions.MidlineLeft);
-            Layout(message.rectTransform, 24);
+            TMP_Text title = Text(card, "Title", "EVENT", a.DisplayFont, HudTheme.ToastTitleSize, HudTheme.Info, TextAlignmentOptions.MidlineLeft);
+            Layout(title.rectTransform, 40);
+            TMP_Text message = Text(card, "Message", "", a.LabelFont, HudTheme.ToastBodySize, HudTheme.Value, TextAlignmentOptions.MidlineLeft);
+            Layout(message.rectTransform, 32);
+            AutoSize(message, HudTheme.ToastBodySize, HudTheme.MinAutoSize);
             card.gameObject.SetActive(false);
             feed.template = card.gameObject;
             return feed;
@@ -381,15 +436,15 @@ namespace MTS.Hud
             RectTransform panel = Rect("Panel", holder);
             panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
             panel.pivot = new Vector2(0, 1);
-            Background(panel, a.Panel, new Color(0.06f, 0f, 0f, 0.94f), 20).raycastTarget = false;
+            Background(panel, a.Panel, new Color(0.06f, 0f, 0f, 0.95f), 20).raycastTarget = false;
             var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
-            vlg.padding = new RectOffset(12, 12, 8, 10);
+            vlg.padding = new RectOffset(Pad, Pad, 10, 12);
             vlg.childControlHeight = true;
             vlg.childControlWidth = true;
             var fitter = panel.gameObject.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            panel.sizeDelta = new Vector2(360, 0);
-            TMP_Text label = Text(panel, "Text", "", a.LabelFont, 17, HudTheme.Value, TextAlignmentOptions.TopLeft);
+            panel.sizeDelta = new Vector2(460, 0);
+            TMP_Text label = Text(panel, "Text", "", a.LabelFont, HudTheme.TooltipSize, HudTheme.Value, TextAlignmentOptions.TopLeft);
             label.enableWordWrapping = true;
             label.raycastTarget = false;
             tip.panel = panel;
@@ -462,6 +517,15 @@ namespace MTS.Hud
             return row;
         }
 
+        private static RectOffset Padding() => new RectOffset(Pad, Pad, Pad - 4, Pad);
+
+        private static void AutoSize(TMP_Text t, float max, float min)
+        {
+            t.enableAutoSizing = true;
+            t.fontSizeMax = max;
+            t.fontSizeMin = min;
+        }
+
         private static Image Sliced(GameObject go, Sprite sprite, Color color, float pixelsPerUnitMultiplier)
         {
             Image img = go.AddComponent<Image>();
@@ -506,8 +570,21 @@ namespace MTS.Hud
 
         private static void CompassLabel(RectTransform parent, string letter, Vector2 position)
         {
-            TMP_Text t = Text(parent, letter, letter, a.DisplayFont, 22, HudTheme.Label, TextAlignmentOptions.Center);
-            Place(t.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), position, new Vector2(30, 30));
+            TMP_Text t = Text(parent, letter, letter, a.DisplayFont, HudTheme.ButtonSize, HudTheme.Label, TextAlignmentOptions.Center);
+            Place(t.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), position, new Vector2(34, 34));
+            t.raycastTarget = false;
+        }
+
+        /// <summary>Ring speed label on the south-east diagonal, left-aligned just outside the ring of the given radius.</summary>
+        private static void ScaleLabel(RectTransform parent, string name, string text, float radius)
+        {
+            TMP_Text t = Text(parent, name, text, a.LabelFont, HudTheme.LegendSize, HudTheme.Label, TextAlignmentOptions.TopLeft);
+            float d = radius * 0.7071f + 2f;
+            RectTransform rt = t.rectTransform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0, 1);
+            rt.anchoredPosition = new Vector2(d, -d);
+            rt.sizeDelta = new Vector2(100, 24);
             t.raycastTarget = false;
         }
 
@@ -533,8 +610,8 @@ namespace MTS.Hud
             t.richText = true;
             if (font != null && a != null && font == a.DisplayFont && font != a.ValueFont)
             {
-                // The LED font is a dynamic TMP asset in the frozen TextMesh Pro folder. Rendering upper case only
-                // uses glyphs it already has, so TMP does not add (and save) new glyphs to it.
+                // The LED font is a dynamic TMP asset. Rendering upper case only uses glyphs it already has, so TMP
+                // does not add (and save) new glyphs to it.
                 t.fontStyle = FontStyles.UpperCase;
             }
 
@@ -560,11 +637,11 @@ namespace MTS.Hud
             if (title != null)
             {
                 RectTransform header = Rect("Header", panel);
-                Layout(header, 40);
+                Layout(header, HudTheme.HeaderHeight);
                 Sliced(header.gameObject, a.Panel, HudTheme.Header, 16);
-                TMP_Text t = Text(header, "Title", title, a.DisplayFont, 26, HudTheme.Value, TextAlignmentOptions.MidlineLeft);
+                TMP_Text t = Text(header, "Title", title, a.DisplayFont, HudTheme.TitleSize, HudTheme.Value, TextAlignmentOptions.MidlineLeft);
                 Stretch(t.rectTransform);
-                t.rectTransform.offsetMin = new Vector2(14, 0);
+                t.rectTransform.offsetMin = new Vector2(Inset, 0); // same inset as the row labels below
                 RectTransform gap = Rect("Gap", panel);
                 Layout(gap, 4);
             }
@@ -572,35 +649,40 @@ namespace MTS.Hud
             return panel;
         }
 
-        /// <summary>Label on the left, value on the right; returns the value text.</summary>
-        private static TMP_Text Row(RectTransform panel, string name, string label, string tooltip, float height = RowHeight, float valueSize = 24)
+        /// <summary>
+        /// Label on the left, value right-aligned on the panel's value column; returns the value text.
+        /// Both texts sit <see cref="HudTheme.RowInset"/> from the row edge.
+        /// </summary>
+        private static TMP_Text Row(RectTransform panel, string name, string label, string tooltip, float height = RowHeight, float valueSize = HudTheme.ValueSize)
         {
+            const float labelColumn = 0.37f;
             RectTransform row = Rect(name, panel);
             Layout(row, height);
             Image shade = row.gameObject.AddComponent<Image>();
             shade.color = HudTheme.RowShade;
             shade.raycastTarget = true; // for the tooltip
-            TMP_Text l = Text(row, "Label", label, a.LabelFont, 19, HudTheme.Label, TextAlignmentOptions.MidlineLeft);
+            TMP_Text l = Text(row, "Label", label, a.LabelFont, HudTheme.LabelSize, HudTheme.Label, TextAlignmentOptions.MidlineLeft);
             l.rectTransform.anchorMin = new Vector2(0, 0);
-            l.rectTransform.anchorMax = new Vector2(0.38f, 1);
-            l.rectTransform.offsetMin = new Vector2(8, 0);
+            l.rectTransform.anchorMax = new Vector2(labelColumn, 1);
+            l.rectTransform.offsetMin = new Vector2(Inset, 0);
             l.rectTransform.offsetMax = Vector2.zero;
             TMP_Text v = Value(row, "Value", "--", valueSize, HudTheme.Value, TextAlignmentOptions.MidlineRight);
-            v.rectTransform.anchorMin = new Vector2(0.36f, 0);
+            v.rectTransform.anchorMin = new Vector2(labelColumn, 0);
             v.rectTransform.anchorMax = new Vector2(1, 1);
-            v.rectTransform.offsetMin = Vector2.zero;
-            v.rectTransform.offsetMax = new Vector2(-8, 0);
-            v.enableAutoSizing = true;
-            v.fontSizeMin = 14;
-            v.fontSizeMax = valueSize;
+            v.rectTransform.offsetMin = new Vector2(4, 0);
+            v.rectTransform.offsetMax = new Vector2(-Inset, 0);
+            AutoSize(v, valueSize, HudTheme.MinAutoSize);
             Tip(row.gameObject, label + ": " + tooltip);
             return v;
         }
 
+        /// <summary>Section caption inside a panel body: bold, upper case, left-aligned on the row inset.</summary>
         private static void Caption(RectTransform parent, string text)
         {
-            TMP_Text t = Text(parent, "Caption " + text, text.ToUpperInvariant(), a.LabelFont, 16, HudTheme.Dim, TextAlignmentOptions.BottomLeft);
-            Layout(t.rectTransform, 20);
+            TMP_Text t = Text(parent, "Caption " + text, text.ToUpperInvariant(), a.LabelFont, HudTheme.LabelSize, HudTheme.Dim, TextAlignmentOptions.BottomLeft);
+            t.fontStyle = FontStyles.Bold;
+            t.margin = new Vector4(Inset, 0, Inset, 2);
+            Layout(t.rectTransform, 30);
         }
 
         public static Button MakeButton(Transform parent, string name, string label, float width, float height, float fontSize,
@@ -626,51 +708,33 @@ namespace MTS.Hud
             button.navigation = new Navigation { mode = Navigation.Mode.None };
             text = Text(rt, "Label", label, a.DisplayFont, fontSize, HudTheme.Value, TextAlignmentOptions.Center);
             Stretch(text.rectTransform);
-            text.enableAutoSizing = true;
-            text.fontSizeMax = fontSize;
-            text.fontSizeMin = Mathf.Min(12, fontSize);
-            text.margin = new Vector4(6, 0, 6, 0);
+            AutoSize(text, fontSize, Mathf.Min(HudTheme.MinAutoSize, fontSize));
+            text.margin = new Vector4(8, 0, 8, 0);
             return button;
-        }
-
-        private static void Cycler(RectTransform parent, string name, float height, out Button prev, out TMP_Text value, out Button next, string tooltip)
-        {
-            RectTransform row = HRow(parent, name, height, 6);
-            prev = MakeButton(row, "Prev", "<", height, height, 26, out _);
-            RectTransform mid = Rect("Value", row);
-            Layout(mid, height).flexibleWidth = 1;
-            Sliced(mid.gameObject, a.Panel, new Color(0, 0, 0, 0.35f), 14);
-            value = Text(mid, "Text", "", a.LabelFont, 19, HudTheme.Value, TextAlignmentOptions.Center);
-            Stretch(value.rectTransform);
-            value.enableAutoSizing = true;
-            value.fontSizeMin = 12;
-            value.fontSizeMax = 19;
-            value.margin = new Vector4(6, 0, 6, 0);
-            next = MakeButton(row, "Next", ">", height, height, 26, out _);
-            Tip(mid.gameObject, tooltip);
-            mid.GetComponent<Image>().raycastTarget = true;
         }
 
         private static Slider LabelledSlider(RectTransform parent, string name, string label, out TMP_Text value, string tooltip)
         {
             RectTransform block = Rect(name, parent);
-            Layout(block, 54);
+            Layout(block, 70);
             RectTransform top = Rect("Top", block);
             top.anchorMin = new Vector2(0, 1);
             top.anchorMax = new Vector2(1, 1);
             top.pivot = new Vector2(0.5f, 1);
-            top.sizeDelta = new Vector2(0, 26);
+            top.sizeDelta = new Vector2(0, 36);
             top.anchoredPosition = Vector2.zero;
-            TMP_Text l = Text(top, "Label", label, a.LabelFont, 18, HudTheme.Label, TextAlignmentOptions.MidlineLeft);
+            TMP_Text l = Text(top, "Label", label, a.LabelFont, HudTheme.LabelSize, HudTheme.Label, TextAlignmentOptions.MidlineLeft);
             Stretch(l.rectTransform);
-            value = Value(top, "Value", "", 20, HudTheme.Value, TextAlignmentOptions.MidlineRight);
+            l.margin = new Vector4(Inset, 0, Inset, 0);
+            value = Value(top, "Value", "", HudTheme.ValueSize, HudTheme.Value, TextAlignmentOptions.MidlineRight);
             Stretch(value.rectTransform);
+            value.margin = new Vector4(Inset, 0, Inset, 0);
 
             RectTransform sliderRt = Rect("Slider", block);
             sliderRt.anchorMin = new Vector2(0, 0);
             sliderRt.anchorMax = new Vector2(1, 0);
             sliderRt.pivot = new Vector2(0.5f, 0);
-            sliderRt.sizeDelta = new Vector2(-12, 24);
+            sliderRt.sizeDelta = new Vector2(-2 * Inset, 28);
             sliderRt.anchoredPosition = new Vector2(0, 2);
             Slider slider = sliderRt.gameObject.AddComponent<Slider>();
 
@@ -694,7 +758,7 @@ namespace MTS.Hud
             handleArea.offsetMin = new Vector2(10, 0);
             handleArea.offsetMax = new Vector2(-10, 0);
             RectTransform handle = Rect("Handle", handleArea);
-            handle.sizeDelta = new Vector2(22, 0);
+            handle.sizeDelta = new Vector2(24, 0);
             Image hi = Simple(handle.gameObject, a.Panel, Color.white);
             hi.preserveAspect = false;
 

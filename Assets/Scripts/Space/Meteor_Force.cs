@@ -30,8 +30,8 @@ public class Meteor_Force : MonoBehaviour
     [Tooltip("Real seconds to wait after the run ends before opening the results scene (lets the HUD show the end event).")]
     public float endTransitionDelay = 1.5f;
 
-    [Header("Start mode (temporary, until a toggle is added to the input screen)")]
-    [Tooltip("Off: classic NEA release from rest. On: inbound path reaching the atmosphere at the entry speed and angle below.")]
+    [Header("Start mode override (testing only: normally set on the input screen and the launch panel)")]
+    [Tooltip("Off: from rest (released at rest at the start point, falling under gravity). On: inbound entry, arriving at the 120 km entry interface at the entry speed and angle below.")]
     public bool realisticEntryMode = false;
     public float entrySpeed = 17000f;
     public float entryAngleDegrees = 45f;

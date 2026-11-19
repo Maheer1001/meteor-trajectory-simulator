@@ -28,8 +28,14 @@ namespace MTS.Core.Tests
         [TestCase(1.5, "1.5 kg")]
         [TestCase(850.0, "850 kg")]
         [TestCase(30000.0, "30.00 t")]
-        [TestCase(2500000.0, "2,500.0 t")]
-        [TestCase(1.0e8, "100,000 t")]
+        [TestCase(250000.0, "250.0 t")]
+        [TestCase(2500000.0, "2.50 kt")]
+        [TestCase(1.2e7, "12.0 kt")]
+        [TestCase(1.0e8, "100 kt")]
+        [TestCase(5.1e8, "510 kt")]
+        [TestCase(1.7e12, "1.70 Gt")]
+        [TestCase(1.25e15, "1,250 Gt")]
+        [TestCase(1.0e16, "10,000 Gt")]
         public void MassUsesTonnesAboveOneTonne(double kg, string expected)
         {
             Assert.That(UnitFormat.Mass(kg), Is.EqualTo(expected));
@@ -39,6 +45,8 @@ namespace MTS.Core.Tests
         [TestCase(0.25, "250 g/s")]
         [TestCase(12.34, "12.3 kg/s")]
         [TestCase(4200.0, "4.20 t/s")]
+        [TestCase(3.0e6, "3.00 kt/s")]
+        [TestCase(8.0e12, "8.00 Gt/s")]
         public void MassRate(double rate, string expected)
         {
             Assert.That(UnitFormat.MassRate(rate), Is.EqualTo(expected));
@@ -58,9 +66,68 @@ namespace MTS.Core.Tests
         [TestCase(12346.0, "12.35 kPa")]
         [TestCase(250000.0, "250.0 kPa")]
         [TestCase(8.0e6, "8.00 MPa")]
+        [TestCase(4.5e8, "450.0 MPa")]
+        [TestCase(2.3e9, "2.30 GPa")]
+        [TestCase(4.0e11, "400.0 GPa")]
         public void PressureUsesKiloAndMegaPascals(double pa, string expected)
         {
             Assert.That(UnitFormat.Pressure(pa), Is.EqualTo(expected));
+        }
+
+        [TestCase(4.184e9, "1.00 t TNT")]
+        [TestCase(2.1e12, "502 t TNT")]
+        [TestCase(500.0 * 4.184e12, "500 kt TNT")]
+        [TestCase(15.0e3 * 4.184e12, "15.0 Mt TNT")]
+        [TestCase(2.5e23, "59.8 Tt TNT")]
+        [TestCase(1.0, "< 1 t TNT")]
+        public void EnergyUsesTntEquivalent(double joules, string expected)
+        {
+            Assert.That(UnitFormat.Energy(joules), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void ScenarioEnergiesReadCleanly()
+        {
+            // 0.5 m v^2 of the scenarios, from a house-sized fireball to Chicxulub.
+            Assert.That(UnitFormat.TntKilotons(ImpactScenarios.Chelyabinsk.EntryEnergyKilotons), Does.EndWith("kt TNT"));
+            Assert.That(UnitFormat.TntKilotons(ImpactScenarios.Tunguska.EntryEnergyKilotons), Does.EndWith("Mt TNT"));
+            Assert.That(UnitFormat.TntKilotons(ImpactScenarios.Chicxulub.EntryEnergyKilotons), Is.EqualTo("59.8 Tt TNT"));
+        }
+
+        [TestCase(0.42, "42 cm")]
+        [TestCase(2.5, "2.50 m")]
+        [TestCase(19.0, "19.00 m")]
+        [TestCase(560.0, "560 m")]
+        [TestCase(1250.0, "1.25 km")]
+        [TestCase(10500.0, "10.5 km")]
+        [TestCase(2.0e6, "2,000 km")]
+        public void LengthGoesFromCentimetresToKilometres(double metres, string expected)
+        {
+            Assert.That(UnitFormat.Length(metres), Is.EqualTo(expected));
+        }
+
+        [TestCase(4.56e9, "4.56 GW")]
+        [TestCase(999.7e12, "1.00 PW")]
+        [TestCase(3.2e18, "3.20 EW")]
+        [TestCase(7.0e24, "7.00 YW")]
+        [TestCase(4.0e27, "4,000 YW")]
+        public void PowerHasPrefixesForHugeFireballs(double watts, string expected)
+        {
+            Assert.That(UnitFormat.Power(watts), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void HugeValuesStayShort()
+        {
+            double[] samples = { 1e3, 1e6, 1e9, 1e12, 1e15, 1e16, 1e18 };
+            foreach (double v in samples)
+            {
+                foreach (string s in new[] { UnitFormat.Mass(v), UnitFormat.MassRate(v), UnitFormat.Energy(v), UnitFormat.Power(v), UnitFormat.Pressure(v / 1e6) })
+                {
+                    Assert.That(s.Length, Is.LessThanOrEqualTo(14), s);
+                    Assert.That(s, Does.Not.Contain("E+"), s);
+                }
+            }
         }
 
         [Test]
