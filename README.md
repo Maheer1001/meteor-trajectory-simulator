@@ -1,6 +1,6 @@
 # Meteor Trajectory Simulator
 
-![Demo: loading the Chicxulub scenario, a 10 km carbonaceous asteroid flying past a true-scale Earth, its fiery entry, the impact fireball and shock rings, then the results, effects and damage-ring map](media/demo.gif)
+![A 10 km asteroid (the Chicxulub scenario) passes a true-scale Earth, burns through the atmosphere and strikes: a planet-scale fireball and shock rings seen from orbit](media/hero-chicxulub.gif)
 
 A Unity simulation of a meteor falling towards Earth, from a house-sized fireball to the dinosaur killer. You pick a famous impact or design your own (mass and a mix of up to four materials), then watch it fall through space, enter the atmosphere, and either burn up, explode in the air or hit the ground. The simulator then estimates the energy, crater, blast, heat, earthquake, debris and tsunami effects and shows where on Earth it happened.
 
@@ -40,6 +40,14 @@ The physics is in a separate, unit-tested C# library (`Assets/Scripts/Core`); [d
 - **Keys:** Space = launch / pause / play, `+` / `-` = time warp (shown as real ×N; the step size stays fixed, a faster warp takes more steps per frame), `1`-`3` = cameras, `H` = hide HUD, `Esc` = menu.
 - **Results:** `1`-`5` switch tabs; on the map drag to pan, scroll to zoom and click the legend to show or hide layers.
 - The main menu and the pause menu (Esc) have a More Information page: what it does, the stages, the physics in plain words with links to background reading, the controls and credits.
+
+## Walkthrough
+
+![Walkthrough: picking the Chicxulub scenario on the setup screen, launching with the HUD, the entry and impact, then the results, effects and damage-ring map](media/demo.gif)
+
+| Tunguska 1908: a stony airburst over the ocean |
+| --- |
+| ![The Tunguska scenario: a 60 m stony body streaks in, bursts in the air and leaves a flattened-forest scar and blast rings](media/hero-tunguska.gif) |
 
 ## Screenshots
 
