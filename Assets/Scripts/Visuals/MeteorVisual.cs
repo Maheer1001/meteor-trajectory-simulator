@@ -162,7 +162,7 @@ namespace MTS.Visuals
 
             float q = (float)t.DynamicPressure;
             float qGlow = Mathf.Clamp01(Mathf.Log10(1f + q) / 6.5f); // ~1 at 3 MPa
-            float plasmaI = Mathf.Clamp01(b * 1.3f) * (0.5f + qGlow) * 2.4f + flash * 2f;
+            float plasmaI = Mathf.Clamp01(b * 1.3f) * (0.5f + qGlow) * 1.3f + flash * 2f;
             bool broken = t.Broken;
 
             plasma.gameObject.SetActive(plasmaI > 0.01f);
@@ -234,7 +234,7 @@ namespace MTS.Visuals
             if (rock != null) rock.gameObject.SetActive(false);
             if (plasma != null) plasma.gameObject.SetActive(false);
             if (glow != null) glow.gameObject.SetActive(false);
-            if (trail != null) trail.emitting = false;
+            if (trail != null) { trail.emitting = false; trail.time = 0.8f; trail.widthMultiplier *= 0.4f; }
             if (sparks != null) { var e = sparks.emission; e.rateOverTime = 0; }
             if (smoke != null) { var e = smoke.emission; e.rateOverDistance = 0; }
             if (pointLight != null) pointLight.intensity = 0;

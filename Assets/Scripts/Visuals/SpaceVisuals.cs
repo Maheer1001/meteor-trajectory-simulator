@@ -259,6 +259,11 @@ namespace MTS.Visuals
             float lineWidth = Mathf.Max(earthDist, distKm) * pixelSize * 2.2f;
             pastLine.widthMultiplier = lineWidth;
             futureLine.widthMultiplier = lineWidth * 0.8f;
+            // In the close-up the camera sits on the path itself, where a screen-sized line would become a wall.
+            bool showPaths = mode != 0 || blend < 0.5f;
+            pastLine.enabled = showPaths;
+            futureLine.enabled = showPaths;
+            impactMarker.gameObject.SetActive(showPaths);
         }
 
         private void RecordPast(in MeteorState s)

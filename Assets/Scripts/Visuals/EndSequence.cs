@@ -152,7 +152,8 @@ namespace MTS.Visuals
             float flashRadius = Mathf.Lerp(3000f, 60000f, energyScale);
             while (t < Duration)
             {
-                float dt = Time.unscaledDeltaTime;
+                // real time, or the fixed capture step when recording (Time.captureFramerate)
+                float dt = Time.captureFramerate > 0 ? 1f / Time.captureFramerate : Time.unscaledDeltaTime;
                 t += dt;
 
                 // flash: very fast rise, slow decay
@@ -162,7 +163,9 @@ namespace MTS.Visuals
                 if (flashVolume != null) flashVolume.weight = Mathf.Clamp01(f * 0.9f);
                 if (flashGlow != null)
                 {
-                    flashGlow.localScale = Vector3.one * flashRadius * 0.35f * (0.3f + 0.7f * Mathf.Sqrt(Mathf.Clamp01(t * 2f))) * (groundEffects ? 1f : 0.4f);
+                    float size = flashRadius * 0.35f * (0.3f + 0.7f * Mathf.Sqrt(Mathf.Clamp01(t * 2f))) * (groundEffects ? 1f : 0.4f);
+                    size = Mathf.Min(size, Vector3.Distance(visuals.CameraPosition, flashAt) * 0.6f); // never swallow the view
+                    flashGlow.localScale = Vector3.one * size;
                     flashGlowMat.SetFloat("_Intensity", f * 2.5f);
                 }
 
