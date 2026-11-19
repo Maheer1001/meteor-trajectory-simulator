@@ -45,6 +45,9 @@ namespace MTS.Visuals
         private Vector3 trackDir = Vector3.forward;
         private Vector3 sunLocal;
         private bool initialised;
+
+        /// <summary>True once the rig (meteor, cameras, lines) has been built for the current run.</summary>
+        public bool IsReady => initialised && meteor != null;
         private bool ended;
         private bool wasBroken;
         private double lastSimTime = double.NaN;

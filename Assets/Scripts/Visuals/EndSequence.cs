@@ -38,18 +38,44 @@ namespace MTS.Visuals
         /// </summary>
         public static bool HoldSceneChange()
         {
-            if (active == null || !active.isActiveAndEnabled || active.finished)
+            if (active == null || !active.isActiveAndEnabled || active.finished || active.visuals == null)
             {
+                return false;
+            }
+
+            float now = Time.unscaledTime;
+            if (active.holdSince < 0f)
+            {
+                active.holdSince = now;
+            }
+
+            // Failsafe: never hold the results scene longer than the sequence (plus slack), even if it threw.
+            if (now - active.holdSince > ReadyTimeout + Duration + 2f)
+            {
+                active.finished = true;
+                Time.timeScale = SimulationSession.Instance.IsPaused ? 0f : 1f;
+                Debug.LogWarning("End sequence did not finish in time; continuing to the results.");
                 return false;
             }
 
             if (!active.playing)
             {
+                // The run can end in the scene's first frames (high time warp) before the rig is built: wait briefly.
+                if (!active.visuals.IsReady)
+                {
+                    return now - active.holdSince < ReadyTimeout;
+                }
+
                 active.Play();
             }
 
             return !active.finished;
         }
+
+        /// <summary>Longest real time (s) to wait for the visuals rig before skipping the sequence.</summary>
+        public const float ReadyTimeout = 1f;
+
+        private float holdSince = -1f;
 
         public AtmosphereVisuals visuals;
         public PostProcessVolume flashVolume;
