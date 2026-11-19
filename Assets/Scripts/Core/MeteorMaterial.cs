@@ -29,9 +29,14 @@ namespace MTS.Core
         /// <summary>Bulk strength Y_i (Pa) used for aerodynamic break-up.</summary>
         public double Strength { get; }
 
+        /// <summary>How the material looks (for the visuals only; never used by the physics).</summary>
+        public MaterialAppearance Appearance { get; }
+
         public MeteorMaterial(string name, double density, double specificHeat, double heatOfAblation,
-            double ablationTemperature, double emissivity, double heatTransferCoefficient, double strength)
+            double ablationTemperature, double emissivity, double heatTransferCoefficient, double strength,
+            MaterialAppearance? appearance = null)
         {
+            Appearance = appearance ?? MaterialAppearance.ForDensity(density);
             Name = name;
             Density = density;
             SpecificHeat = specificHeat;

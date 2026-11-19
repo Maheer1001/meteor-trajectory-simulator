@@ -130,7 +130,7 @@ namespace MTS.Hud.Editor
                       "; legacy canvas enabled = " + LegacyCanvasEnabled());
             yield return Capture(output, "space-prelaunch-classic");
 
-            hud.launchPanel.SetMode(EntryMode.RealisticEntry);
+            hud.launchPanel.SetMode(EntryMode.Inbound);
             hud.launchPanel.SelectMaterial(MeteorMaterialPresets.All.Count + 1); // two-material mix
             hud.RefreshAll();
             yield return Frames(5);
@@ -150,7 +150,7 @@ namespace MTS.Hud.Editor
             // --- Atmosphere in flight: start just above the entry interface and fast-forward to an eventful moment.
             var start = new Vec3d(PhysicalConstants.EarthRadius + 125000.0, 0, 0);
             MeteorProperties props = MeteorProperties.Create(20000, MeteorMaterialPresets.OrdinaryChondrite, 0.5, start,
-                EntryMode.RealisticEntry, 19000, 40);
+                EntryMode.Inbound, 19000, 40);
             SimulationRunner runner = SimulationSession.Instance.Begin(props);
             while (!runner.HasEnded && !runner.State.Broken)
             {

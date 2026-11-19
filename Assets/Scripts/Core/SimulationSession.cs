@@ -13,14 +13,25 @@ namespace MTS.Core
         public static SimulationSession Instance { get; } = new SimulationSession();
 
         /// <summary>How new runs are started. Kept across <see cref="Reset"/> (it is a setting, not run state).</summary>
-        public EntryMode Mode { get; set; } = EntryMode.ClassicNea;
+        public EntryMode Mode { get; set; } = EntryMode.FromRest;
         public double EntrySpeed { get; set; } = MeteorProperties.DefaultEntrySpeed;
         public double EntryAngleDegrees { get; set; } = MeteorProperties.DefaultEntryAngleDegrees;
-        /// <summary>
-        /// Material preset or composition mix for new runs (see <see cref="MeteorMaterialPresets"/>); null means
-        /// "custom": build the material from the input screen's density, SHC and SCF. Kept across <see cref="Reset"/>.
-        /// </summary>
-        public MeteorMaterial MaterialPreset { get; set; }
+        /// <summary>What new runs are made of (one to four materials). Never null. Kept across <see cref="Reset"/>.</summary>
+        public MeteorComposition Composition
+        {
+            get => composition;
+            set => composition = value ?? MeteorComposition.Default;
+        }
+
+        private MeteorComposition composition = MeteorComposition.Default;
+
+        /// <summary>Compatibility shim (single material); prefer <see cref="Composition"/>. Null resets to the default.</summary>
+        [System.Obsolete("Use Composition.")]
+        public MeteorMaterial MaterialPreset
+        {
+            get => composition.Material;
+            set => Composition = value == null ? null : MeteorComposition.FromMaterial(value);
+        }
 
         public MeteorProperties Properties { get; private set; }
         public SimulationRunner Runner { get; private set; }

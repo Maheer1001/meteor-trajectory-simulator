@@ -311,7 +311,7 @@ namespace MTS.Results
             var entry = new ReportSection("Start and entry");
             if (p != null)
             {
-                entry.Add("Start mode", p.Mode == EntryMode.RealisticEntry ? "Realistic entry" : "Classic NEA (released from rest)");
+                entry.Add("Start mode", p.Mode == EntryMode.Inbound ? "Realistic entry" : "Classic NEA (released from rest)");
                 entry.Add("Initial mass", ResultsFormat.Mass(p.Mass));
                 if (p.Material != null)
                 {

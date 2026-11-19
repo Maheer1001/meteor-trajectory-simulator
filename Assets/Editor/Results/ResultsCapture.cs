@@ -49,7 +49,7 @@ namespace MTS.Results.Editor
             double ye = Math.Cos(phi) * Math.Sin(lambda);
             double ze = Math.Sin(phi);
             var start = new Vec3d(xe * r, ze * r, -ye * r);
-            return MeteorProperties.Create(mass, material, 0, start, EntryMode.RealisticEntry, speed, angle, fragmentation);
+            return MeteorProperties.Create(mass, material, 0, start, EntryMode.Inbound, speed, angle, fragmentation);
         }
 
         public static void CaptureAll()

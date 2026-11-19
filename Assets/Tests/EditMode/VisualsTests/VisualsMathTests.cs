@@ -110,7 +110,7 @@ namespace MTS.Visuals.Tests
         public void PathPredictor_ReachesTheEndWithoutTouchingTheSession()
         {
             MeteorProperties props = MeteorProperties.FromInputs(60000, 3500, 800, 0.5, 1, 1, 1,
-                EntryMode.RealisticEntry, 17000, 45);
+                EntryMode.Inbound, 17000, 45);
             var session = new SimulationRunner(props);
             MeteorState before = session.State;
 

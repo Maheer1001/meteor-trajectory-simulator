@@ -6,10 +6,10 @@ namespace MTS.Core
     /// <summary>How the meteor is started off.</summary>
     public enum EntryMode
     {
-        /// <summary>The original NEA set-up: released from rest at the chosen coordinates, falling under gravity.</summary>
-        ClassicNea,
-        /// <summary>Released at the chosen coordinates on an inbound path that reaches the entry interface at a set speed and angle.</summary>
-        RealisticEntry,
+        /// <summary>From rest: released at rest at the chosen coordinates, falling under gravity.</summary>
+        FromRest,
+        /// <summary>Inbound entry: released at the chosen coordinates on an inbound path that reaches the entry interface at a set speed and angle.</summary>
+        Inbound,
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ namespace MTS.Core
         /// replaced with the documented defaults and listed in <see cref="Substitutions"/>.
         /// </summary>
         public static MeteorProperties FromInputs(double mass, double density, double specificHeat, double scf,
-            double x, double y, double z, EntryMode mode = EntryMode.ClassicNea,
+            double x, double y, double z, EntryMode mode = EntryMode.FromRest,
             double entrySpeed = DefaultEntrySpeed, double entryAngleDegrees = DefaultEntryAngleDegrees,
             bool enableFragmentation = true, MeteorMaterial preset = null)
         {
@@ -84,9 +84,30 @@ namespace MTS.Core
             return p;
         }
 
+        /// <summary>
+        /// Builds properties from the input screen: mass, start coordinates and a material composition (which supplies
+        /// density, specific heat, ablation and strength). Missing or invalid values are replaced with defaults and listed
+        /// in <see cref="Substitutions"/>. The shape factor uses <see cref="DefaultScf"/>.
+        /// </summary>
+        public static MeteorProperties FromComposition(double mass, MeteorComposition composition, double x, double y, double z,
+            EntryMode mode = EntryMode.FromRest, double entrySpeed = DefaultEntrySpeed,
+            double entryAngleDegrees = DefaultEntryAngleDegrees, bool enableFragmentation = true)
+        {
+            var p = new MeteorProperties();
+            p.Mass = p.Positive(mass, DefaultMass, "mass");
+            p.Scf = DefaultScf;
+            p.Material = (composition ?? MeteorComposition.Default).Material;
+            p.StartPosition = new Vec3d(p.Coordinate(x, "X"), p.Coordinate(y, "Y"), p.Coordinate(z, "Z")) * MetresPerCoordinateUnit;
+            p.Mode = mode;
+            p.EntrySpeed = p.Positive(entrySpeed, DefaultEntrySpeed, "entry speed");
+            p.EntryAngleDegrees = p.InRange(entryAngleDegrees, 1.0, 90.0, DefaultEntryAngleDegrees, "entry angle");
+            p.EnableFragmentation = enableFragmentation;
+            return p;
+        }
+
         /// <summary>Builds properties directly (used by tests and tools).</summary>
         public static MeteorProperties Create(double mass, MeteorMaterial material, double scf, Vec3d startPosition,
-            EntryMode mode = EntryMode.ClassicNea, double entrySpeed = DefaultEntrySpeed,
+            EntryMode mode = EntryMode.FromRest, double entrySpeed = DefaultEntrySpeed,
             double entryAngleDegrees = DefaultEntryAngleDegrees, bool enableFragmentation = true, double pancakeFactor = 7.0,
             Vec3d? initialVelocity = null)
         {

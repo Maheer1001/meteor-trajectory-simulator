@@ -39,7 +39,7 @@ namespace MTS.Core.Tests
         }
 
         [Test]
-        public void NoNaNAcrossMassDensityWindSweep([Values(EntryMode.ClassicNea, EntryMode.RealisticEntry)] EntryMode mode)
+        public void NoNaNAcrossMassDensityWindSweep([Values(EntryMode.FromRest, EntryMode.Inbound)] EntryMode mode)
         {
             foreach (double m in Masses)
             {
@@ -63,7 +63,7 @@ namespace MTS.Core.Tests
             for (int i = 0; i < 40; i++)
             {
                 double Coord() => (rng.Next(2) == 0 ? -1 : 1) * (1 + rng.NextDouble() * 49);
-                var mode = i % 2 == 0 ? EntryMode.ClassicNea : EntryMode.RealisticEntry;
+                var mode = i % 2 == 0 ? EntryMode.FromRest : EntryMode.Inbound;
                 var p = MeteorProperties.FromInputs(5000 + rng.NextDouble() * 55000, 1000 + rng.NextDouble() * 7000,
                     400 + rng.NextDouble() * 1100, rng.NextDouble(), Coord(), Coord(), Coord(), mode);
                 var runner = new SimulationRunner(p, 10 + rng.NextDouble() * 95, rng.NextDouble() * 0.5 - 0.25);
@@ -101,7 +101,7 @@ namespace MTS.Core.Tests
         [Test]
         public void RealisticModeReachesEntryInterfaceAtRequestedSpeed()
         {
-            var p = MeteorProperties.FromInputs(60000, 7800, 800, 0.5, 10, -20, 5, EntryMode.RealisticEntry);
+            var p = MeteorProperties.FromInputs(60000, 7800, 800, 0.5, 10, -20, 5, EntryMode.Inbound);
             var runner = new SimulationRunner(p, 15, 0);
             while (runner.Stage == SimulationStage.Space)
             {
@@ -134,7 +134,7 @@ namespace MTS.Core.Tests
             var mat = MeteorMaterial.CreateCustom(2000, 800, 0);
             double mass = 2000 * Math.PI / 6 * Math.Pow(75, 3);
             var start = new Vec3d(0, 0, PhysicalConstants.EarthRadius + PhysicalConstants.AtmosphereEntryAltitude);
-            var p = MeteorProperties.Create(mass, mat, 0, start, EntryMode.RealisticEntry, 17000, 45);
+            var p = MeteorProperties.Create(mass, mat, 0, start, EntryMode.Inbound, 17000, 45);
             SimulationResult r = new SimulationRunner(p).RunToEnd();
             Assert.That(r.Reason, Is.EqualTo(EndReason.Airburst));
             Assert.That(r.BreakupAltitude, Is.InRange(55000, 70000));
@@ -157,7 +157,7 @@ namespace MTS.Core.Tests
             // Small fragile body at high speed without fragmentation: ablates away.
             var mat = MeteorMaterial.CreateCustom(1000, 800, 0);
             var start = new Vec3d(0, 0, PhysicalConstants.EarthRadius + PhysicalConstants.AtmosphereEntryAltitude);
-            var p = MeteorProperties.Create(20, mat, 0, start, EntryMode.RealisticEntry, 30000, 60, enableFragmentation: false);
+            var p = MeteorProperties.Create(20, mat, 0, start, EntryMode.Inbound, 30000, 60, enableFragmentation: false);
             SimulationResult r = new SimulationRunner(p).RunToEnd();
             Assert.That(r.Reason, Is.EqualTo(EndReason.Disintegrated));
             Assert.That(ImpactModel.Assess(r, p).Regime, Is.EqualTo(ImpactRegime.None));

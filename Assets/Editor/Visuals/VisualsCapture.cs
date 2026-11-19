@@ -129,16 +129,16 @@ namespace MTS.Visuals.EditorTools
                 MeteorProperties props;
                 if (which == "space")
                 {
-                    props = MeteorProperties.FromInputs(60000, 3500, 800, 0.5, 2.2, 1.6, -1.4, EntryMode.RealisticEntry, 17000, 40);
+                    props = MeteorProperties.FromInputs(60000, 3500, 800, 0.5, 2.2, 1.6, -1.4, EntryMode.Inbound, 17000, 40);
                 }
                 else if (which == "iron")
                 {
                     // a fragmentation-free iron body: reaches the ground and makes a crater
-                    props = MeteorProperties.FromInputs(1.0e6, 7800, 450, 0.5, 2.2, 1.6, -1.4, EntryMode.RealisticEntry, 15000, 55, enableFragmentation: false, preset: MeteorMaterialPresets.Iron);
+                    props = MeteorProperties.FromInputs(1.0e6, 7800, 450, 0.5, 2.2, 1.6, -1.4, EntryMode.Inbound, 15000, 55, enableFragmentation: false, preset: MeteorMaterialPresets.Iron);
                 }
                 else
                 {
-                    props = MeteorProperties.FromInputs(250000, 3300, 800, 0.5, 2.2, 1.6, -1.4, EntryMode.RealisticEntry, 18000, 38);
+                    props = MeteorProperties.FromInputs(250000, 3300, 800, 0.5, 2.2, 1.6, -1.4, EntryMode.Inbound, 18000, 38);
                 }
 
                 runner = session.Begin(props);

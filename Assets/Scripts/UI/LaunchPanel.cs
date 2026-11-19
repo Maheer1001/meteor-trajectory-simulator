@@ -84,8 +84,8 @@ namespace MTS.Hud
             }
 
             Hook(collapseButton, () => SetExpanded(!Expanded));
-            Hook(classicButton, () => SetMode(EntryMode.ClassicNea));
-            Hook(realisticButton, () => SetMode(EntryMode.RealisticEntry));
+            Hook(classicButton, () => SetMode(EntryMode.FromRest));
+            Hook(realisticButton, () => SetMode(EntryMode.Inbound));
             Hook(materialPrev, () => StepMaterial(-1));
             Hook(materialNext, () => StepMaterial(+1));
             Hook(mixAPrev, () => { mixA = Wrap(mixA - 1, PresetCount); ApplyMaterial(); });
@@ -200,7 +200,7 @@ namespace MTS.Hud
         {
             refreshing = true;
             SimulationSession session = SimulationSession.Instance;
-            bool realistic = session.Mode == EntryMode.RealisticEntry;
+            bool realistic = session.Mode == EntryMode.Inbound;
             CultureInfo ci = CultureInfo.InvariantCulture;
 
             SetSelected(classicButton, !realistic);

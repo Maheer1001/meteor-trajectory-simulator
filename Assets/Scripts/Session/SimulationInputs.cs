@@ -16,10 +16,9 @@ public static class SimulationInputs
     /// <summary>Snapshots the current input-screen values into validated simulation properties.</summary>
     public static MeteorProperties Snapshot(SimulationSession session)
     {
-        MeteorProperties properties = MeteorProperties.FromInputs(
-            MassRangeInput.Mass, DensityRangeInput.Density, SHCRangeInput.SHC, SCFRangeInput.SCF,
-            Xcord.X, Ycord.Y, Zcord.Z, session.Mode, session.EntrySpeed, session.EntryAngleDegrees,
-            preset: session.MaterialPreset);
+        MeteorProperties properties = MeteorProperties.FromComposition(
+            MassRangeInput.Mass, session.Composition, Xcord.X, Ycord.Y, Zcord.Z,
+            session.Mode, session.EntrySpeed, session.EntryAngleDegrees);
 
         if (properties.Substitutions.Count > 0)
         {
@@ -46,7 +45,7 @@ public static class SimulationInputs
 
     /// <summary>
     /// Temporary, non-UI way to choose the start mode until a toggle is added to the screens:
-    /// -mtsMode classic|realistic, -mtsEntrySpeed m/s, -mtsEntryAngle degrees.
+    /// -mtsMode rest|inbound, -mtsScenario <id>, -mtsEntrySpeed m/s, -mtsEntryAngle degrees.
     /// </summary>
     public static void ApplyCommandLineOnce(SimulationSession session)
     {
@@ -63,9 +62,19 @@ public static class SimulationInputs
             switch (args[i].ToLowerInvariant())
             {
                 case "-mtsmode":
-                    session.Mode = value.Equals("realistic", StringComparison.OrdinalIgnoreCase)
-                        ? EntryMode.RealisticEntry
-                        : EntryMode.ClassicNea;
+                    session.Mode = value.Equals("inbound", StringComparison.OrdinalIgnoreCase) ||
+                                   value.Equals("realistic", StringComparison.OrdinalIgnoreCase)
+                        ? EntryMode.Inbound
+                        : EntryMode.FromRest;
+                    break;
+                case "-mtsscenario":
+                    ImpactScenario scenario = ImpactScenarios.ById(value);
+                    if (scenario != null)
+                    {
+                        scenario.ApplyTo(session);
+                        MassRangeInput.Mass = (float)scenario.Mass;
+                    }
+
                     break;
                 case "-mtsentryspeed":
                     if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double speed) && speed > 0)

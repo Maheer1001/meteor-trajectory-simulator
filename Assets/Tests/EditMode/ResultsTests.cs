@@ -243,7 +243,7 @@ namespace MTS.Core.Tests
         private static MeteorProperties AtEntry(double mass, MeteorMaterial mat, double speed, double angle, bool fragmentation = true)
         {
             var start = new Vec3d(0, 0, PhysicalConstants.EarthRadius + PhysicalConstants.AtmosphereEntryAltitude);
-            return MeteorProperties.Create(mass, mat, 0, start, EntryMode.RealisticEntry, speed, angle, fragmentation);
+            return MeteorProperties.Create(mass, mat, 0, start, EntryMode.Inbound, speed, angle, fragmentation);
         }
 
         private static string StatValue(object report, string label)

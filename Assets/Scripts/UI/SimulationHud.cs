@@ -215,7 +215,7 @@ namespace MTS.Hud
             LaunchPanel.MarkApplied();
             HudToasts.Clear();
             SimulationSession session = SimulationSession.Instance;
-            HudToasts.Post("LAUNCH", session.Mode == EntryMode.RealisticEntry
+            HudToasts.Post("LAUNCH", session.Mode == EntryMode.Inbound
                 ? "Realistic entry: " + UnitFormat.Speed(session.EntrySpeed) + " at " + UnitFormat.Angle(session.EntryAngleDegrees)
                 : "Classic NEA: released from rest", HudTheme.Launch);
             if (launchPanel != null) launchPanel.SetExpanded(false);
@@ -321,7 +321,7 @@ namespace MTS.Hud
                 if (stage == HudStage.Space && SimulationClock.HoldForLaunch)
                 {
                     // Before launch, describe what the launch will use (the session settings).
-                    string next = session.Mode == EntryMode.RealisticEntry
+                    string next = session.Mode == EntryMode.Inbound
                         ? "Realistic " + UnitFormat.Speed(session.EntrySpeed) + " @ " + UnitFormat.Angle(session.EntryAngleDegrees)
                         : "Classic NEA";
                     modeValue.text = "Next launch: " + next + "  |  " +
@@ -330,7 +330,7 @@ namespace MTS.Hud
                 else
                 {
                     MeteorProperties p = runner?.Properties;
-                    string mode = p == null ? "" : p.Mode == EntryMode.RealisticEntry
+                    string mode = p == null ? "" : p.Mode == EntryMode.Inbound
                         ? "Realistic " + UnitFormat.Speed(p.EntrySpeed) + " @ " + UnitFormat.Angle(p.EntryAngleDegrees)
                         : "Classic NEA";
                     modeValue.text = p == null ? "" : mode + "  |  " + p.Material.Name;

@@ -412,7 +412,7 @@ namespace MTS.Core
                 return p.InitialVelocity.Value;
             }
 
-            if (p.Mode != EntryMode.RealisticEntry)
+            if (p.Mode != EntryMode.Inbound)
             {
                 return Vec3d.Zero; // classic NEA: released from rest
             }

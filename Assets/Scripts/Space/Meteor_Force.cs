@@ -47,7 +47,7 @@ public class Meteor_Force : MonoBehaviour
         {
             if (realisticEntryMode)
             {
-                session.Mode = EntryMode.RealisticEntry;
+                session.Mode = EntryMode.Inbound;
                 session.EntrySpeed = entrySpeed;
                 session.EntryAngleDegrees = entryAngleDegrees;
             }

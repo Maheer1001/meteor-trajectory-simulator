@@ -54,7 +54,7 @@ namespace MTS.Core.Tests
         public void EndOfRealRunIsReported()
         {
             var props = MeteorProperties.Create(5000, MeteorMaterialPresets.Iron, 0.5,
-                new Vec3d(PhysicalConstants.EarthRadius + 110000, 0, 0), EntryMode.RealisticEntry, 15000, 60);
+                new Vec3d(PhysicalConstants.EarthRadius + 110000, 0, 0), EntryMode.Inbound, 15000, 60);
             var runner = new SimulationRunner(props);
             var d = new FlightEventDetector();
             var seen = new List<FlightEvent>();
