@@ -95,7 +95,7 @@ namespace MTS.Hud
 
         private static void BuildTopBar(SimulationHud hud, RectTransform parent)
         {
-            const float width = 900f;
+            const float width = 840f;
             RectTransform bar = Panel(parent, "StageBar", null, width, new RectOffset(Pad, Pad, 10, 8), 4);
             Place(bar, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -16), new Vector2(width, 0));
 
@@ -125,7 +125,7 @@ namespace MTS.Hud
                 }
 
                 RectTransform chip = Rect("Chip " + names[i], row);
-                Layout(chip, -1, i == 1 ? 220 : 160);
+                Layout(chip, -1, i == 1 ? 210 : 150);
                 Image img = Sliced(chip.gameObject, a.Panel, HudTheme.ButtonOff, 14);
                 hud.stageChips[i] = img;
                 TMP_Text t = Text(chip, "Label", names[i], a.DisplayFont, HudTheme.ChipSize, HudTheme.Dim, TextAlignmentOptions.Center);
@@ -135,7 +135,7 @@ namespace MTS.Hud
             }
 
             TMP_Text elapsed = Value(row, "Elapsed", "T+ --", HudTheme.ValueSize, HudTheme.Value, TextAlignmentOptions.MidlineRight);
-            var le = Layout(elapsed.rectTransform, -1, 200);
+            var le = Layout(elapsed.rectTransform, -1, 180);
             le.flexibleWidth = 1;
             elapsed.margin = new Vector4(0, 0, Inset, 0);
             hud.elapsedValue = elapsed;
@@ -291,7 +291,7 @@ namespace MTS.Hud
 
         private static WindCompass BuildWindPanel(RectTransform parent)
         {
-            const float width = 440f;
+            const float width = SidePanelWidth;
             const float size = 240f;
             const float r = size * 0.5f;
             RectTransform panel = Panel(parent, "WindPanel", "WIND", width, Padding(), 6);
@@ -344,7 +344,7 @@ namespace MTS.Hud
 
             RectTransform buttons = HRow(panel, "Buttons", 46, 8);
             wc.calmButton = MakeButton(buttons, "Calm", "CALM", -1, 46, 22, out _, flexible: true);
-            wc.resetButton = MakeButton(buttons, "Reset", "DEFAULT 15 M/S E", -1, 46, 22, out _, flexible: true);
+            wc.resetButton = MakeButton(buttons, "Reset", "DEFAULT", -1, 46, 22, out _, flexible: true);
             Tip(wc.calmButton.gameObject, "No wind.");
             Tip(wc.resetButton.gameObject, "Back to the default wind: 15 m/s towards the east.");
             return wc;
@@ -352,7 +352,7 @@ namespace MTS.Hud
 
         private static void BuildTimeBar(SimulationHud hud, RectTransform parent)
         {
-            const float width = 1040f;
+            const float width = 1200f;
             RectTransform bar = Panel(parent, "TimeBar", null, width, new RectOffset(Pad, Pad, 12, 8), 6);
             Place(bar, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(width, 0));
             bar.pivot = new Vector2(0.5f, 0);
@@ -402,7 +402,7 @@ namespace MTS.Hud
             feed.container = area;
 
             RectTransform card = Rect("ToastTemplate", area);
-            Background(card, a.Panel, new Color(0.1f, 0f, 0f, 0.88f), 16);
+            Background(card, a.Panel, new Color(0.09f, 0f, 0f, 0.93f), 16);
             card.gameObject.AddComponent<CanvasGroup>();
             var vlg = card.gameObject.AddComponent<VerticalLayoutGroup>();
             vlg.padding = new RectOffset(34, Pad, 10, 12);

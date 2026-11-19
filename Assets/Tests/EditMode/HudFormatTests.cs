@@ -75,7 +75,7 @@ namespace MTS.Core.Tests
         }
 
         [TestCase(4.184e9, "1.00 t TNT")]
-        [TestCase(2.1e15, "502 t TNT")]
+        [TestCase(2.1e12, "502 t TNT")]
         [TestCase(500.0 * 4.184e12, "500 kt TNT")]
         [TestCase(15.0e3 * 4.184e12, "15.0 Mt TNT")]
         [TestCase(2.5e23, "59.8 Tt TNT")]

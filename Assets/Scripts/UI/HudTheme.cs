@@ -26,7 +26,7 @@ namespace MTS.Hud
         public static readonly Color BarFill = new Color(1f, 0.3f, 0.12f, 1f);
         public static readonly Color Warning = new Color(1f, 0.72f, 0.1f, 1f);
         public static readonly Color Info = new Color(0.55f, 0.8f, 1f, 1f);
-        public static readonly Color Danger = new Color(1f, 0.25f, 0.2f, 1f);
+        public static readonly Color Danger = new Color(1f, 0.4f, 0.32f, 1f);
 
         // ---- text sizes (reference canvas px)
         public const float TitleSize = 30f;       // panel headings
