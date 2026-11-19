@@ -270,7 +270,7 @@ namespace MTS.Menus.Editor
             Shortcut(left, a, "1  2  3", "Switch camera");
             Shortcut(left, a, "H", "Hide or show the display");
             Shortcut(left, a, "Esc", "Pause menu (closes this page here)");
-            Shortcut(left, a, "1 to 4", "Results tabs");
+            Shortcut(left, a, "1 to 5", "Results tabs");
 
             Section(right, a, "THE PHYSICS");
             Topic(right, a, "Gravity", "Newtonian gravity, stepped with the fourth-order Runge-Kutta (RK4) method for an accurate path.",
