@@ -1,0 +1,16 @@
+{
+    "name": "MTS.Visuals.Math",
+    "rootNamespace": "MTS.Visuals",
+    "references": [
+        "MTS.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
