@@ -67,9 +67,13 @@ namespace MTS.Core
 
         public static double KineticEnergy(double mass, double speed) => 0.5 * mass * speed * speed;
 
-        /// <summary>Transient crater diameter (m), Eq. 21: D_tc = 1.161 (rho_i/rho_t)^(1/3) L^0.78 v^0.44 g^-0.22 sin^(1/3) theta.</summary>
+        /// <summary>
+        /// Transient crater diameter (m), Eq. 21: D_tc = C (rho_i/rho_t)^(1/3) L^0.78 v^0.44 g^-0.22 sin^(1/3) theta with
+        /// C = 1.161 for rock; EIEP uses C = 1.365 for the cavity in a water layer.
+        /// </summary>
         public static double TransientCraterDiameter(double impactorDiameter, double impactorDensity, double speed,
-            double angleDegrees, double targetDensity = DefaultTargetDensity, double gravity = SurfaceGravity)
+            double angleDegrees, double targetDensity = DefaultTargetDensity, double gravity = SurfaceGravity,
+            double coefficient = 1.161)
         {
             if (!(impactorDiameter > 0) || !(speed > 0))
             {
@@ -77,7 +81,7 @@ namespace MTS.Core
             }
 
             double theta = Math.Max(1.0, Math.Min(90.0, angleDegrees)) * Math.PI / 180.0;
-            return 1.161 * Math.Pow(impactorDensity / targetDensity, 1.0 / 3.0) * Math.Pow(impactorDiameter, 0.78) *
+            return coefficient * Math.Pow(impactorDensity / targetDensity, 1.0 / 3.0) * Math.Pow(impactorDiameter, 0.78) *
                    Math.Pow(speed, 0.44) * Math.Pow(gravity, -0.22) * Math.Pow(Math.Sin(theta), 1.0 / 3.0);
         }
 
@@ -195,7 +199,15 @@ namespace MTS.Core
             return GroundReflectionFactor * freeAir * impedance;
         }
 
-        /// <summary>Largest ground range (m) at which the peak overpressure is at least the given level; 0 if never.</summary>
+        /// <summary>Half the Earth's circumference (m): the largest possible ground range (the antipode).</summary>
+        public static double MaxGroundRange => Math.PI * PhysicalConstants.EarthRadius;
+
+        /// <summary>
+        /// Largest ground range (m) at which the peak overpressure is at least the given level; 0 if never. The search
+        /// stops at the antipode (<see cref="MaxGroundRange"/>): a level still exceeded there is reached everywhere on Earth
+        /// and the result is exactly MaxGroundRange. (The flat-ground blast fits overestimate the far field of
+        /// planet-scale events, so radii beyond about a quarter of the circumference are best read as "global".)
+        /// </summary>
         public static double BlastRadius(double level, double energy, double burstAltitude)
         {
             if (!(energy > 0) || !(level > 0))
@@ -204,7 +216,7 @@ namespace MTS.Core
             }
 
             const double rMin = 1e-3;
-            const double rMax = 1e8;
+            double rMax = MaxGroundRange;
             const int samples = 1200;
             double logMin = Math.Log(rMin);
             double logStep = (Math.Log(rMax) - logMin) / samples;
