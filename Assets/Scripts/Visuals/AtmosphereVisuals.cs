@@ -64,6 +64,7 @@ namespace MTS.Visuals
         private Vector3 endGroundZero, endHoriz;
         private float endNearDist, endFarDist, endElevNear, endElevFar, endLookHeight;
         private float endProgress;
+        private bool endGroundMatters;
 
         /// <summary>Dust and ash after a large impact (0..1): dims the Sun and browns the sky. Set by the end sequence.</summary>
         public float Ash { get; set; }
@@ -158,7 +159,9 @@ namespace MTS.Visuals
             // a city-sized body needs a far more distant observer to fit in the sky (and to survive the view)
             float observerScale = Mathf.Max(1f, radius * 40f / observerSideDistance);
             Vector3 obs = side * observerSideDistance * observerScale - trackDir * observerBackDistance * observerScale;
-            observerPos = GroundPointBelow(obs) + Vector3.up * 1.8f;
+            // on a rise a few hundred metres up: from eye height the horizon is only ~5 km away and the view is all
+            // foreground; from here it shows tens of km of hazy landscape under the fireball
+            observerPos = GroundPointBelow(obs) + (GroundPointBelow(obs) - EarthCentre).normalized * 300f;
             Ash = 0f;
             VisualsGlobals.SetAsh(0f);
 
@@ -324,6 +327,8 @@ namespace MTS.Visuals
             endElevNear = Mathf.Lerp(12f, 30f, Mathf.InverseLerp(2000f, 200000f, endNearDist));
             endElevFar = Mathf.Lerp(18f, 62f, Mathf.InverseLerp(20000f, 2.5e6f, endFarDist));
             endLookHeight = burstHeight;
+            // only drop the aim to the ground when something there (rings, scar) is bigger than the burst height
+            endGroundMatters = farRadius > burstHeight * 0.5f;
             endProgress = 0f;
             vcams[3].m_Lens.FieldOfView = fov;
             vcams[3].Priority = 30;
@@ -343,7 +348,7 @@ namespace MTS.Visuals
             float dist = Mathf.Exp(Mathf.Lerp(Mathf.Log(endNearDist), Mathf.Log(endFarDist), k));
             float elev = Mathf.Lerp(endElevNear, endElevFar, k) * Mathf.Deg2Rad;
             // the point of interest: the burst high up when close, ground zero when wide
-            float lookHeight = Mathf.Lerp(endLookHeight, Mathf.Min(endLookHeight, dist * 0.08f), k);
+            float lookHeight = endGroundMatters ? Mathf.Lerp(endLookHeight, Mathf.Min(endLookHeight, dist * 0.08f), k) : endLookHeight;
             Vector3 target = endGroundZero + Vector3.up * lookHeight;
             Vector3 pos = target + (endHoriz * Mathf.Cos(elev) + Vector3.up * Mathf.Sin(elev)) * dist;
             pos = KeepAboveGround(pos, 40f + dist * 0.01f);
