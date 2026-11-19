@@ -93,6 +93,55 @@ namespace MTS.Core.Tests
         }
 
         [Test]
+        public void ChelyabinskAirburstReachesTheGroundWithAFewKilopascals()
+        {
+            // About 500 kt released near 30 km (Brown et al. 2013; Popova et al. 2013). Observed: windows broken out to
+            // about 120 km from the track, structural damage light. The EIEP fit alone gives under 0.04 psi everywhere.
+            double e = 500 * PhysicalConstants.JoulesPerKilotonTnt;
+            const double zb = 30000;
+            double zb1 = zb / Math.Pow(500, 1.0 / 3.0);
+            Assert.That(ImpactModel.EiepAirburstOverpressure(0, zb1), Is.LessThan(275.8)); // the old behaviour
+
+            double groundZero = ImpactModel.PeakOverpressure(0, e, zb);
+            Assert.That(groundZero, Is.InRange(1000, 5000));
+            Assert.That(ImpactModel.BlastRadius(275.8, e, zb), Is.InRange(60000, 250000));   // 0.04 psi: window damage
+            Assert.That(ImpactModel.BlastRadius(1034.2, e, zb), Is.InRange(10000, 80000));   // 0.15 psi
+            Assert.That(ImpactModel.BlastRadius(13789.5, e, zb), Is.EqualTo(0));             // no 2 psi on the ground
+
+            ImpactAssessment a = ImpactModel.Airburst(e, 19000, zb, 18);
+            Assert.That(a.BlastRadii[0], Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void HighAltitudeModelAgreesWithEiepForLowBursts()
+        {
+            // Tunguska-like 15 Mt at 8 km: the point-source model is within 15 % of the EIEP fit below the burst,
+            // so the EIEP results for low bursts are unchanged.
+            double e = 15000 * PhysicalConstants.JoulesPerKilotonTnt;
+            double eiep = ImpactModel.EiepAirburstOverpressure(0, 8000 / Math.Pow(15000, 1.0 / 3.0));
+            double point = ImpactModel.HighAltitudeAirburstOverpressure(0, e, 8000);
+            Assert.That(point / eiep, Is.InRange(0.85, 1.15));
+            Assert.That(ImpactModel.PeakOverpressure(0, e, 8000), Is.EqualTo(Math.Max(eiep, point)).Within(1e-6 * eiep));
+        }
+
+        [Test]
+        public void HighAltitudeOverpressureFallsWithRangeAndAltitude()
+        {
+            double e = 100 * PhysicalConstants.JoulesPerKilotonTnt;
+            double previous = double.PositiveInfinity;
+            for (double r = 0; r <= 300000; r += 10000)
+            {
+                double p = ImpactModel.HighAltitudeAirburstOverpressure(r, e, 35000);
+                Assert.That(p, Is.LessThan(previous));
+                previous = p;
+            }
+
+            Assert.That(ImpactModel.HighAltitudeAirburstOverpressure(0, e, 50000),
+                Is.LessThan(ImpactModel.HighAltitudeAirburstOverpressure(0, e, 30000)));
+            Assert.That(ImpactModel.HighAltitudeAirburstOverpressure(0, 0, 30000), Is.EqualTo(0));
+        }
+
+        [Test]
         public void EiepStrength()
         {
             Assert.That(MeteorMaterial.EiepStrength(0), Is.EqualTo(128).Within(1));

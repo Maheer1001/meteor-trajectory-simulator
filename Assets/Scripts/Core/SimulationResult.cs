@@ -30,25 +30,59 @@ namespace MTS.Core
     /// <summary>
     /// Time series recorded during a run, decimated so it stays bounded: samples are taken every
     /// <see cref="Interval"/> seconds and, when the buffer is full, every other sample is dropped and the
-    /// interval doubled.
+    /// interval doubled. The main series covers the whole flight (which can be days long in space); the
+    /// <see cref="Entry"/> series holds the atmospheric part (below the entry interface) at a much finer interval,
+    /// for the results charts. Mach number and dynamic pressure use the speed relative to still air (the wind of at
+    /// most a few tens of m/s is negligible at meteor speeds).
     /// </summary>
     public sealed class TimeSeries
     {
         public const int Capacity = 1024;
+        /// <summary>Initial sampling interval of the <see cref="Entry"/> series (s).</summary>
+        public const double EntryInterval = 0.02;
 
         public List<double> Time { get; } = new List<double>();
         public List<double> Distance { get; } = new List<double>();
         public List<double> Altitude { get; } = new List<double>();
         public List<double> Speed { get; } = new List<double>();
         public List<double> Mass { get; } = new List<double>();
+        /// <summary>Surface-layer temperature (K).</summary>
+        public List<double> Temperature { get; } = new List<double>();
+        /// <summary>Mach number (0 above the modelled atmosphere).</summary>
+        public List<double> Mach { get; } = new List<double>();
+        /// <summary>Dynamic (ram) pressure 0.5 rho v^2 (Pa).</summary>
+        public List<double> DynamicPressure { get; } = new List<double>();
 
-        public double Interval { get; private set; } = 1.0;
+        /// <summary>High-resolution series of the atmospheric flight (null for an entry series itself).</summary>
+        public TimeSeries Entry { get; }
+
+        public double Interval { get; private set; }
         private double nextSampleTime;
+        private readonly double entryCeiling;
+
+        public TimeSeries() : this(1.0, true)
+        {
+        }
+
+        private TimeSeries(double interval, bool withEntry)
+        {
+            Interval = interval;
+            entryCeiling = PhysicalConstants.AtmosphereEntryAltitude;
+            if (withEntry)
+            {
+                Entry = new TimeSeries(EntryInterval, false);
+            }
+        }
 
         public int Count => Time.Count;
 
         public void Record(in MeteorState s, bool force = false)
         {
+            if (Entry != null && s.Altitude <= entryCeiling)
+            {
+                Entry.Record(s, force);
+            }
+
             if (!force && s.Time < nextSampleTime)
             {
                 return;
@@ -59,11 +93,25 @@ namespace MTS.Core
                 return;
             }
 
+            double altitude = s.Altitude;
+            double mach = 0.0;
+            double q = 0.0;
+            if (altitude < 1.0e6)
+            {
+                AtmosphereSample air = Atmosphere.Sample(Math.Max(0.0, altitude));
+                double v = s.Speed;
+                q = 0.5 * air.Density * v * v;
+                mach = altitude <= Atmosphere.TopOfLayeredModel ? v / air.SpeedOfSound : 0.0;
+            }
+
             Time.Add(s.Time);
             Distance.Add(s.DistanceTravelled);
-            Altitude.Add(s.Altitude);
+            Altitude.Add(altitude);
             Speed.Add(s.Speed);
             Mass.Add(s.Mass);
+            Temperature.Add(s.Temperature);
+            Mach.Add(mach);
+            DynamicPressure.Add(q);
             nextSampleTime = s.Time + Interval;
 
             if (Count >= Capacity)
@@ -91,6 +139,9 @@ namespace MTS.Core
             Halve(Altitude);
             Halve(Speed);
             Halve(Mass);
+            Halve(Temperature);
+            Halve(Mach);
+            Halve(DynamicPressure);
             Interval *= 2.0;
             nextSampleTime = Time[Count - 1] + Interval;
         }
