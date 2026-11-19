@@ -114,6 +114,24 @@ namespace MTS.Core.Tests
         }
 
         [Test]
+        public void TimeLeftOverAtAStageChangeIsNotCarriedIntoTheNextStage()
+        {
+            var runner = new SimulationRunner(MeteorProperties.Create(60000, MeteorMaterialPresets.OrdinaryChondrite, 0.5,
+                StartHigh, EntryMode.RealisticEntry));
+            int guard = 0;
+            while (runner.Stage == SimulationStage.Space && ++guard < 1000)
+            {
+                runner.Advance(20.0); // a x1000 warp tick; stops at atmospheric entry
+            }
+
+            Assert.That(runner.Stage, Is.EqualTo(SimulationStage.Atmosphere));
+            double entered = runner.State.Time;
+            runner.Advance(0.02, SimulationRunner.DefaultMaxStepsPerAdvance, false); // first x1 tick in the atmosphere
+            Assert.That(runner.State.Time - entered, Is.LessThanOrEqualTo(0.02 + 1e-9));
+            Assert.That(runner.HasEnded, Is.False);
+        }
+
+        [Test]
         public void MagnitudeFromPowerFollowsPogsonScale()
         {
             Assert.That(FlightTelemetry.MagnitudeFromPower(FlightTelemetry.ZeroMagnitudePower), Is.EqualTo(0).Within(1e-12));

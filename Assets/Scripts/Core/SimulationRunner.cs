@@ -170,6 +170,9 @@ namespace MTS.Core
                 steps++;
                 if (stopOnStageChange && Stage != startStage)
                 {
+                    // Drop the rest of this call's time: it was asked for at the old stage's time warp, and carrying
+                    // it over would replay it at once in the next stage (a whole atmospheric flight in one tick).
+                    pendingTime = 0;
                     break;
                 }
             }
