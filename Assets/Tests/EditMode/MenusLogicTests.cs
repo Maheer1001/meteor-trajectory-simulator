@@ -7,6 +7,77 @@ namespace MTS.Core.Tests
 {
     public class MenusLogicTests
     {
+        [TearDown]
+        public void RestoreSessionSettings()
+        {
+            SimulationSession session = SimulationSession.Instance;
+            session.Composition = null;
+            session.Mode = EntryMode.FromRest;
+            session.EntrySpeed = MeteorProperties.DefaultEntrySpeed;
+            session.EntryAngleDegrees = MeteorProperties.DefaultEntryAngleDegrees;
+        }
+
+        [Test]
+        public void CustomRestoresTheSetupFromBeforeAPreset()
+        {
+            var sel = new ScenarioSelection();
+            SimulationSession session = SimulationSession.Instance;
+            MeteorComposition mine = MeteorComposition.Create(new[] { ("iron", 70.0), ("cometary", 30.0) });
+            session.Composition = mine;
+            session.Mode = EntryMode.FromRest;
+            session.EntrySpeed = 15000;
+            session.EntryAngleDegrees = 30;
+            double mass = 42000;
+            Assert.That(sel.Selected(mass, session), Is.EqualTo(0));
+
+            mass = sel.Pick(4, mass, session); // Chicxulub
+            Assert.That(sel.Selected(mass, session), Is.EqualTo(5));
+            Assert.That(mass, Is.EqualTo(ImpactScenarios.Chicxulub.Mass));
+
+            mass = sel.Pick(-1, mass, session); // Custom
+            Assert.That(sel.Selected(mass, session), Is.EqualTo(0));
+            Assert.That(mass, Is.EqualTo(42000));
+            Assert.That(session.Composition, Is.SameAs(mine));
+            Assert.That(session.Mode, Is.EqualTo(EntryMode.FromRest));
+            Assert.That(session.EntrySpeed, Is.EqualTo(15000));
+            Assert.That(session.EntryAngleDegrees, Is.EqualTo(30));
+            session.Composition = null;
+        }
+
+        [Test]
+        public void CustomWithoutAnEarlierSetupGivesADefaultMeteoroid()
+        {
+            var sel = new ScenarioSelection();
+            SimulationSession session = SimulationSession.Instance;
+            ImpactScenarios.Tunguska.ApplyTo(session);
+            double mass = ImpactScenarios.Tunguska.Mass;
+            Assert.That(sel.Selected(mass, session), Is.EqualTo(2));
+            mass = sel.Pick(-1, mass, session);
+            Assert.That(sel.Selected(mass, session), Is.EqualTo(0));
+            Assert.That(mass, Is.EqualTo(MeteorProperties.DefaultMass));
+            Assert.That(session.Mode, Is.EqualTo(EntryMode.FromRest));
+            Assert.That(session.Composition, Is.SameAs(MeteorComposition.Default));
+        }
+
+        [Test]
+        public void SwitchingBetweenPresetsKeepsTheCustomSetup()
+        {
+            var sel = new ScenarioSelection();
+            SimulationSession session = SimulationSession.Instance;
+            session.Composition = MeteorComposition.Single("enstatite-chondrite");
+            session.Mode = EntryMode.Inbound;
+            session.EntrySpeed = 25000;
+            session.EntryAngleDegrees = 70;
+            double mass = sel.Pick(0, 9000, session);  // Chelyabinsk
+            mass = sel.Pick(2, mass, session);         // Meteor Crater
+            mass = sel.Pick(-1, mass, session);        // Custom
+            Assert.That(mass, Is.EqualTo(9000));
+            Assert.That(session.Composition.Parts[0].Id, Is.EqualTo("enstatite-chondrite"));
+            Assert.That(session.EntrySpeed, Is.EqualTo(25000));
+            session.Composition = null;
+            session.Mode = EntryMode.FromRest;
+        }
+
         [TestCase("30000", 30000)]
         [TestCase("30,000", 30000)]
         [TestCase("30 000", 30000)]

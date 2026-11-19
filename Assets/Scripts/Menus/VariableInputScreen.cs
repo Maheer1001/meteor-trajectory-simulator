@@ -150,16 +150,13 @@ namespace MTS.Menus
 
         // ---- Scenarios ----
 
-        /// <summary>Loads a scenario (index into <see cref="ImpactScenarios.All"/>); -1 (Custom) keeps the current values.</summary>
+        /// <summary>
+        /// Loads a scenario (index into <see cref="ImpactScenarios.All"/>), or -1 for Custom, which brings back the
+        /// setup you had before picking a scenario (or a default custom meteoroid).
+        /// </summary>
         public void PickScenario(int index)
         {
-            if (index < 0 || index >= ImpactScenarios.All.Count)
-            {
-                Refresh();
-                return;
-            }
-
-            MassRangeInput.Mass = (float)SetupLogic.Apply(ImpactScenarios.All[index], Session);
+            MassRangeInput.Mass = (float)ScenarioSelection.Shared.Pick(index, MassRangeInput.Mass, Session);
             mixer = CompositionMixer.From(Session.Composition);
             massField.SetTextWithoutNotify(MassInput.ToFieldText(MassRangeInput.Mass));
             SetHint(MassHintText, false);
@@ -306,8 +303,8 @@ namespace MTS.Menus
             MeteorComposition composition = session.Composition;
 
             // Scenario chips.
-            ImpactScenario match = SetupLogic.Match(mass, composition, session.Mode, session.EntrySpeed, session.EntryAngleDegrees);
-            int selected = match == null ? 0 : IndexOf(match) + 1;
+            int selected = ScenarioSelection.Shared.Selected(mass, session);
+            ImpactScenario match = selected > 0 ? ImpactScenarios.All[selected - 1] : null;
             for (int i = 0; i < scenarioButtons.Length; i++) MenuUi.SetSelected(scenarioButtons[i], i == selected);
             if (scenarioDescription != null)
             {
