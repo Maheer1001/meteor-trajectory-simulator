@@ -20,12 +20,13 @@ The physics is in a separate, unit-tested C# library (`Assets/Scripts/Core`); [d
   - Drag from the velocity relative to the (wind-blown) air, with a drag coefficient that depends on Mach and Knudsen number
   - Heating and **ablation** from single-body meteor theory, with a stable (implicit) temperature update and a radiative-equilibrium starting temperature of about 278 K
   - **Fragmentation and airburst** using the "pancake" model from the Earth Impact Effects Program (EIEP): break-up when ram pressure exceeds the material strength
-  - Wind speed and direction set with sliders
+  - Wind speed and direction set with a drag-to-aim wind compass
   - The run ends in a ground impact, an airburst, or the meteor ablating away; every outcome goes to the results screen
-- **Collision stage:**
-  - Impact energy, crater size (transient and final, simple or complex) and blast radii for nine overpressure levels, from Collins, Melosh & Marcus (2005), drawn as rings on an Earth map
-  - The end position is converted to latitude/longitude (allowing for Earth's rotation) and reverse-geocoded to a place name, or "Location is in the sea"
-  - A graph of distance travelled over time
+- **Results screen** (tabs: Summary, Map, Charts, Physics):
+  - Energy in kt/Mt TNT compared with Hiroshima, Chelyabinsk and Tunguska; crater size (transient and final, simple or complex) and blast radii for nine overpressure levels from Collins, Melosh & Marcus (2005), plus a point-source model so high airbursts such as Chelyabinsk still reach the ground
+  - Dedicated airburst and burned-up outcomes (burst altitude, energy deposited, ground overpressure)
+  - Geodesic damage rings on a pannable, zoomable world map with legend and scale bar; the end position is converted to latitude/longitude (allowing for Earth's rotation) and reverse-geocoded to a place name or ocean
+  - Charts with axes and units: altitude-time, speed-altitude, mass-altitude, temperature-time
 
 ## Inputs and controls
 
@@ -37,10 +38,10 @@ The physics is in a separate, unit-tested C# library (`Assets/Scripts/Core`); [d
   - X/Y/Z starting coordinates: -50 to -1 or 1 to 50 (one unit is 4,050 km)
 
   Values outside a range are clamped. Blank fields use mid-range defaults. Either `.` or `,` works as the decimal mark.
-- **Time-scale slider** speeds the simulation up or slows it down. The step size stays fixed; a faster time scale just takes more steps per frame.
-- **Pause / play** pauses and resumes the simulation. Restart clears the run completely.
-- **Start mode:** until there is a button for it, choose the mode with the `Realistic Entry Mode` option on the space scene's `Meteor_Force` component, or with the command-line arguments `-mtsMode realistic`, `-mtsEntrySpeed 17000` and `-mtsEntryAngle 45`.
-- **Collision map:** mouse wheel to zoom, arrow keys / WASD to pan.
+- **Launch panel** (Space stage, before launch): Classic NEA or Realistic entry (entry speed 11-72 km/s, angle 5-90°), and the material: custom (from the inputs), one of four presets (stony, carbonaceous, stony-iron, iron) or a two-material mix. The command-line arguments `-mtsMode realistic`, `-mtsEntrySpeed 17000` and `-mtsEntryAngle 45` still work.
+- **HUD:** altitude, speed, Mach, ram pressure, g-load, surface temperature, mass, ablation rate, brightness (absolute magnitude), stage indicator and event pop-ups (entry, break-up, airburst, impact). Hover any readout for a tooltip.
+- **Keys:** Space = launch / pause / play, `+` / `-` = time warp (shown as real ×N; the step size stays fixed, a faster warp takes more steps per frame), `1`-`3` = cameras, `H` = hide HUD, `Esc` = menu.
+- **Results:** `1`-`4` switch tabs; on the map drag to pan and scroll to zoom.
 - The main menu has Start, Continue, Restart, Exit, and a More Information screen that links to background reading (RK4, drag coefficients, overpressure levels).
 
 ## Screenshots
@@ -100,7 +101,7 @@ Copy `Assets/StreamingAssets/secrets.example.json` to `Assets/StreamingAssets/se
 
 `secrets.json` is gitignored, so it won't be committed. Note that Unity copies everything in `StreamingAssets` into a build, so a build made with this file in place contains your key. Don't share that build, or use the environment variable instead.
 
-The code that loads the key is `ApiKeyLoader` in `Assets/Scripts/Collision/CoordinateCalculator.cs`.
+The code that loads the key is `GeocodeApiKey` in `Assets/Scripts/Results/ResultsGeocoder.cs`.
 
 ## Project layout
 
@@ -108,12 +109,14 @@ The code that loads the key is `ApiKeyLoader` in `Assets/Scripts/Collision/Coord
 Assets/Scripts/Core/         Physics library (MTS.Core): USSA76 atmosphere, gravity, drag, heating/ablation,
                              fragmentation, RK4, impact model, simulation runner and session
 Assets/Scripts/Session/      Glue between the input screen and the simulation session
-Assets/Scripts/Space/        Space-stage screen (Meteor_Force.cs)
-Assets/Scripts/Atmosphere/   Atmosphere-stage screen, time and wind sliders (AtmosphereForce.cs)
-Assets/Scripts/Collision/    Results screen: crater/blast radii, lat/long + geocoding, graph, map zoom
+Assets/Scripts/Space/        Space-stage adapter (Meteor_Force.cs)
+Assets/Scripts/Atmosphere/   Atmosphere-stage adapter (AtmosphereForce.cs)
+Assets/Scripts/UI/           Runtime HUD: flight data, launch panel, time warp, wind compass, toasts
+Assets/Scripts/Results/      Results screen: summary, geodesic map rings, charts, geocoding (MTS.Results)
+Assets/Editor/               Builders for the HUD prefabs and results scene, screenshot tools
 Assets/Scripts/Inputs/       Range-checked user inputs
 Assets/Scripts/Main menu/    Scene navigation and info links
-Assets/Tests/EditMode/       Unit tests for the physics library
+Assets/Tests/EditMode/       Unit tests (physics, HUD formatting and controls, results maths)
 Assets/Scenes/               The six scenes
 docs/PHYSICS.md              The physics model, equations and references
 ```

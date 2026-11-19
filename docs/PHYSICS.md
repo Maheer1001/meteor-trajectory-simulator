@@ -102,7 +102,7 @@ m_h c dT/dt = P_in - P_rad,  m_h = min(m, rho_i S delta),  delta = 1 cm
 
 ### Material
 
-`MeteorMaterial` holds everything about composition, so presets or composition mixes can be added later. For now a "custom" material is built from the inputs (density, SHC, SCF). Defaults for the parameters the user does not enter are chosen by density:
+`MeteorMaterial` holds everything about composition. By default a "custom" material is built from the inputs (density, SHC, SCF), and the parameters the user does not enter are chosen by density:
 
 | | Stony (< 6000 kg/m^3) | Iron (>= 6000 kg/m^3) |
 | --- | ---: | ---: |
@@ -110,6 +110,21 @@ m_h c dT/dt = P_in - P_rad,  m_h = min(m, rho_i S delta),  delta = 1 cm
 | T_abl | 2000 K | 1811 K (melting point of iron) |
 | Lambda | 0.1 | 0.1 |
 | Strength Y_i | EIEP Eq. 9 (below) | EIEP Eq. 9 (below) |
+
+**Presets** (`MeteorMaterialPresets`, chosen in the Space stage's launch panel; a preset replaces the density and SHC inputs). Rounded representative bulk values (densities: Britt and Consolmagno 2003; strengths: Popova et al. 2011; Q* and T_abl as used in fireball modelling, Ceplecha and ReVelle 2005):
+
+| Preset | rho (kg/m^3) | c (J/(kg K)) | Q* (MJ/kg) | T_abl (K) | epsilon | Y_i (Pa) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Stony (ordinary chondrite) | 3300 | 750 | 8 | 2000 | 0.90 | 1e6 |
+| Carbonaceous chondrite | 2200 | 900 | 5 | 1700 | 0.95 | 2e5 |
+| Stony-iron (pallasite) | 4800 | 600 | 7 | 1900 | 0.85 | 1e7 |
+| Iron (Fe-Ni) | 7800 | 450 | 6 | 1811 | 0.80 | 5e7 |
+
+**Composition mix** (`MeteorMaterialPresets.Mix`, by mass fraction `w_i`): density by volume `1/rho = sum w_i / rho_i`; c, Q*, T_abl, epsilon and Lambda as mass-weighted means; strength as the weighted geometric mean `exp(sum w_i ln Y_i)`.
+
+### Flight telemetry (display only)
+
+`SimulationRunner.Telemetry` derives display quantities from the state; nothing feeds back into the physics. Mach `= v_rel / a`, ram pressure `q = 0.5 rho_a v_rel^2`, non-gravitational deceleration over the last step in g, mass-loss rate, and the visible radiant power `I = tau * 0.5 * |dm/dt| * v_rel^2` with luminous efficiency `tau = 0.01`. Absolute magnitude `M = -2.5 log10(I / 1500 W)` (zero-magnitude meteor power, Ceplecha et al. 1998), shown as +10 when not glowing.
 
 ## 5. Fragmentation and airburst (Collins et al. 2005, the EIEP "pancake" model)
 
@@ -147,11 +162,18 @@ m_h c dT/dt = P_in - P_rad,  m_h = min(m, rho_i S delta),  delta = 1 cm
   | Glasstone and Dolan Table 4 distances | | within 8 % |
   | 1 t TNT surface burst | | 0.04 psi at about 2.0 km |
 
+- **High-altitude airbursts.** The EIEP airburst fit (Eqs. 55-58) is calibrated on nuclear tests at modest scaled heights and gives almost nothing on the ground for small, high bursts (Chelyabinsk: 157 Pa below the burst, no damage rings). `ImpactModel.PeakOverpressure` therefore takes the larger of the EIEP value and a point-source model (`HighAltitudeAirburstOverpressure`):
+  1. free-air blast of yield E = the Eq. 54 surface-burst curve at E/2 (Glasstone and Dolan 1977, sec. 3.34);
+  2. Sachs scaling to the ambient pressure at the burst altitude, using the slant range from the burst (sec. 3.64-3.66);
+  3. downward weak-shock propagation with amplitude growth `sqrt(rho_g c_g / (rho_b c_b))` (geometric acoustics, Pierce 1989); refraction, absorption and nonlinear attenuation are ignored;
+  4. ground reflection factor 2.
+
+  Chelyabinsk (about 500 kt at about 30 km) now gives about 1.6 kPa at ground zero and the 0.04 psi (window damage) ring at about 117 km, close to the observed window breakage up to about 120 km (Brown et al. 2013; Popova et al. 2013). Tunguska-like low bursts are unchanged below the burst. Because refraction and absorption are ignored, the outer (weakest) rings of mid-altitude bursts are larger than with the EIEP fit alone (1 Mt at 8 km: 0.04 psi ring 105 km to 251 km), so treat those outer radii as upper estimates.
 - **Old model.** The old code computed an "explosive energy" from a drag power divided by a hard-coded wind speed. Its rings were thousands of km across (about 23 000 km for 0.04 psi), and its crater formula was not dimensionally consistent.
 
 ## 7. Impact location
 
-The end position is rotated into the Earth-fixed frame using the elapsed time and Earth's sidereal rate (`7.2921159e-5 rad/s`, prime meridian on `+X` at `t = 0`). Then `lat = asin(Ze / |r|)` and `lon = wrap(atan2(Ye, Xe) - omega t)`, both in degrees. The location is reverse-geocoded with geocode.maps.co: culture-invariant URL, `UnityWebRequest`, cancelled when the scene unloads. The map conversion assumes an equirectangular map 878 x 520 units centred on the origin.
+The end position is rotated into the Earth-fixed frame using the elapsed time and Earth's sidereal rate (`7.2921159e-5 rad/s`, prime meridian on `+X` at `t = 0`). Then `lat = asin(Ze / |r|)` and `lon = wrap(atan2(Ye, Xe) - omega t)`, both in degrees. The location is reverse-geocoded with geocode.maps.co: culture-invariant URL, `UnityWebRequest`, cancelled when the scene unloads. The results map (`MapProjection` in `Assets/Scripts/Results`) is an equirectangular texture with an explicit, unit-tested lat/lon to map-position function. Damage rings are geodesic: each ring point is the destination point at the ring's ground range along bearings 0-360 degrees on a spherical Earth, so rings show the correct 1/cos(latitude) east-west stretch, and pole and antimeridian crossings are handled.
 
 ## 8. Simulation session
 
@@ -159,12 +181,12 @@ The end position is rotated into the Earth-fixed frame using the elapsed time an
 
 - `Reset()` runs on Restart, on going back to the input screen, and before each new run.
 - Pausing only stops the runner, so there is no state stack to save and restore.
-- The scene MonoBehaviours (`Meteor_Force`, `Atmosphere_Force`, `MainMenuButton`, `CollisionEffects`, `CollisionUiOutput`, `Window_Graph`, `CoordinateCalculator`) are thin adapters: they read sliders and inputs into the session and show the session's state.
-- The results screen's graph is drawn from a decimated time series recorded by the runner (at most 1024 samples), not from the old fixed 1-, 10- and 30-minute lists.
+- The scene MonoBehaviours (`Meteor_Force`, `Atmosphere_Force`, `MainMenuButton`), the HUD (`Assets/Scripts/UI`) and the results screen (`Assets/Scripts/Results`) only read the session's state; the HUD writes settings (mode, entry speed and angle, material, wind, time warp) back through the session.
+- The results screen's charts are drawn from decimated time series recorded by the runner (at most 1024 samples each): the whole flight plus a finer series below 120 km, recording time, distance, altitude, speed, mass, temperature, Mach and ram pressure.
 
 ## 9. Main simplifications
 
-- Spherical, non-rotating Earth, and an atmosphere at rest apart from the user's wind. The wind is horizontal: the speed comes from the wind slider, the direction is `slider x pi` from local east towards north, and it applies below 86 km.
+- Spherical, non-rotating Earth, and an atmosphere at rest apart from the user's wind. The wind is horizontal: the speed comes from the wind slider, the direction is an azimuth fraction `f` (angle `f x pi` from local east towards north), set with the HUD's wind compass, and it applies below 86 km.
 - Single body until break-up, then one pancake cloud. No further fragment cascades and no lift.
 - Lumped surface-layer temperature (1 cm skin). Internal heat conduction is not modelled.
 - Earth's shadow is ignored for solar heating.
@@ -178,4 +200,10 @@ The end position is rotated into the Earth-fixed frame using the elapsed time an
 - Bronshten V. A. (1983). *Physics of Meteoric Phenomena*. Reidel.
 - Campbell-Brown M. D., Koschny D. (2004). Model of the ablation of faint meteors. *Astronomy & Astrophysics* 418, 751-758.
 - Glasstone S., Dolan P. J. (1977). *The Effects of Nuclear Weapons*, 3rd ed.
+- Brown P. G. et al. (2013). A 500-kiloton airburst over Chelyabinsk and an enhanced hazard from small impactors. *Nature* 503, 238-241.
+- Popova O. P. et al. (2013). Chelyabinsk airburst, damage assessment, meteorite recovery, and characterization. *Science* 342, 1069-1073.
+- Popova O. et al. (2011). Very low strengths of interplanetary meteoroids and small asteroids. *Meteoritics & Planetary Science* 46(10), 1525-1550.
+- Britt D. T., Consolmagno G. J. (2003). Stony meteorite porosities and densities. *Meteoritics & Planetary Science* 38(8), 1161-1180.
+- Ceplecha Z., ReVelle D. O. (2005). Fragmentation model of meteoroid motion, mass loss, and radiation in the atmosphere. *Meteoritics & Planetary Science* 40(1), 35-54.
+- Pierce A. D. (1989). *Acoustics: An Introduction to Its Physical Principles and Applications*. Acoustical Society of America.
 - Hoerner S. F. (1965). *Fluid-Dynamic Drag*. Bailey A. B., Hiatt J. (1972). Sphere drag coefficients for a broad range of Mach and Reynolds numbers. *AIAA Journal* 10(11).
