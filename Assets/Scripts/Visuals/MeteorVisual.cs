@@ -233,7 +233,8 @@ namespace MTS.Visuals
             // Halo: a few body sizes, but never thinner than a few pixels' worth at the viewing distance (a distant
             // fireball still reads as a bright point) and never larger than a fraction of the view.
             float cam = Mathf.Max(CameraDistance, 1f);
-            float glowSize = Mathf.Max(sheath * (broken ? 3f + 5f * b : 5f + 14f * b), cam * 0.03f * b) * (1f + flash * 1.2f);
+            // (and at least ~1.5 degrees across once it glows at all, so a distant fireball never vanishes)
+            float glowSize = Mathf.Max(sheath * (broken ? 3f + 5f * b : 5f + 14f * b), cam * Mathf.Max(0.03f * b, b > 0.02f ? 0.026f : 0f)) * (1f + flash * 1.2f);
             glowSize = Mathf.Min(glowSize, cam * 0.9f);
             glow.gameObject.SetActive(b > 0.01f || flash > 0.01f);
             glow.localScale = Vector3.one * glowSize;
@@ -248,7 +249,8 @@ namespace MTS.Visuals
             trail.emitting = b > 0.03f;
             trail.widthMultiplier = Mathf.Max((broken ? Radius * 2f : sheath) * (0.6f + b * 1.2f), cam * 0.002f * b);
             trail.minVertexDistance = Mathf.Max(Radius, speed * 0.004f);
-            trail.time = 0.8f + b * 1.6f;
+            // a city-sized body leaves a train hundreds of km long
+            trail.time = (0.8f + b * 1.6f) * (1f + Mathf.Log10(1f + Radius / 10f));
             trailMat.SetColor("_Color", Color.white * (0.55f + b * 0.55f));
 
             float mlr = (float)t.MassLossRate;

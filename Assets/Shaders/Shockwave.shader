@@ -39,7 +39,7 @@ Shader "MTS/Shockwave"
             {
                 v2f o;
                 o.pos = UnityObjectToClipPos(v.vertex);
-                o.p = v.vertex.xz;
+                o.p = v.texcoord.xy; // unit-disc coordinate (flat or curved disc mesh)
                 return o;
             }
 

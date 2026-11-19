@@ -56,6 +56,11 @@ namespace MTS.Visuals
 
         public static void SetCameraAltitude(float metres) => Shader.SetGlobalFloat(CamAlt, metres);
 
+        private static readonly int AshId = Shader.PropertyToID("_MTS_Ash");
+
+        /// <summary>Dust and ash darkening of the sky after a large impact (0 clear .. 1 dark).</summary>
+        public static void SetAsh(float amount) => Shader.SetGlobalFloat(AshId, Mathf.Clamp01(amount));
+
         public static Vector3 ToVector3(Vec3d v) => new Vector3((float)v.X, (float)v.Y, (float)v.Z);
 
         private static Vector4 ToVector4(Vec3d v) => new Vector4((float)v.X, (float)v.Y, (float)v.Z, 0);

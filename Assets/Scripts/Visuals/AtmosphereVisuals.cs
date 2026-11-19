@@ -59,6 +59,18 @@ namespace MTS.Visuals
         private Vector3 smoothedLook;
         private Vector3 endFocus;
 
+        private GameObject globe;
+        private float chaseFov = 60f, observerFov = 50f, sideFov = 60f;
+        private Vector3 endGroundZero, endHoriz;
+        private float endNearDist, endFarDist, endElevNear, endElevFar, endLookHeight;
+        private float endProgress;
+
+        /// <summary>Dust and ash after a large impact (0..1): dims the Sun and browns the sky. Set by the end sequence.</summary>
+        public float Ash { get; set; }
+
+        /// <summary>The fireball (with its effects) as currently drawn.</summary>
+        public MeteorVisual Meteor => meteor;
+
         public Vector3 MeteorWorldPosition => meteorPos;
         public Vector3 CameraPosition => mainCamera != null ? mainCamera.transform.position : Vector3.zero;
         public LocalFrame Frame => frame;
@@ -142,11 +154,15 @@ namespace MTS.Visuals
             Vector3 h = new Vector3(v.x, 0f, v.z);
             trackDir = h.sqrMagnitude > 1e-3f * v.sqrMagnitude ? h.normalized : Vector3.forward;
             Vector3 side = Vector3.Cross(Vector3.up, trackDir).normalized;
-            Vector3 obs = side * observerSideDistance - trackDir * observerBackDistance;
+            float radius = (float)r.State.EquivalentRadius(props.Material.Density);
+            // a city-sized body needs a far more distant observer to fit in the sky (and to survive the view)
+            float observerScale = Mathf.Max(1f, radius * 40f / observerSideDistance);
+            Vector3 obs = side * observerSideDistance * observerScale - trackDir * observerBackDistance * observerScale;
             observerPos = GroundPointBelow(obs) + Vector3.up * 1.8f;
+            Ash = 0f;
+            VisualsGlobals.SetAsh(0f);
 
             BuildWorld();
-            float radius = (float)r.State.EquivalentRadius(props.Material.Density);
             meteor = MeteorVisual.Create(library, null, VisualLayers.Near, true, radius, 7);
             BuildCameras();
             UpdateMeteorPosition(r.State, 0f);
@@ -162,6 +178,17 @@ namespace MTS.Visuals
             g.AddComponent<MeshFilter>().sharedMesh = patch;
             g.AddComponent<MeshRenderer>().sharedMaterial = library.ground;
             ground = g.transform;
+
+            // The rest of the planet, for the orbital end views of continent-scale events: the same ground shader
+            // on a whole sphere, sunk a little below the detailed patch so the patch always wins where both exist.
+            var gl = new GameObject("Globe (visual, orbital views)") { layer = VisualLayers.Far };
+            gl.transform.SetParent(g.transform, false);
+            gl.transform.localPosition = new Vector3(0f, -(float)PhysicalConstants.EarthRadius, 0f);
+            gl.transform.localScale = Vector3.one * ((float)PhysicalConstants.EarthRadius - 1500f);
+            gl.AddComponent<MeshFilter>().sharedMesh = ProceduralMeshes.Icosphere(6);
+            gl.AddComponent<MeshRenderer>().sharedMaterial = library.ground;
+            globe = gl;
+            globe.SetActive(false);
 
             var c = new GameObject("Cloud deck (visual)") { layer = VisualLayers.Far };
             c.transform.position = Vector3.up * cloudHeight;
@@ -235,12 +262,14 @@ namespace MTS.Visuals
             MeteorState s = r.State;
             float dt = Time.deltaTime;
             UpdateMeteorPosition(s, dt);
-            VisualsGlobals.SetSun(sunLocal, sunColor, sunIntensity);
+            float dim = 1f - 0.8f * Mathf.Clamp01(Ash);
+            VisualsGlobals.SetSun(sunLocal, sunColor * Mathf.Lerp(1f, 0.8f, Ash), sunIntensity * dim);
+            VisualsGlobals.SetAsh(Ash);
             VisualsGlobals.SetEarthRotation(s.Time);
             if (sun != null)
             {
                 sun.transform.rotation = Quaternion.LookRotation(-sunLocal);
-                sun.intensity = Mathf.Clamp01(sunLocal.y * 4f + 0.2f) * 1.1f;
+                sun.intensity = Mathf.Clamp01(sunLocal.y * 4f + 0.2f) * 1.1f * dim;
             }
 
             if (!ended)
@@ -248,11 +277,8 @@ namespace MTS.Visuals
                 FlightTelemetry t = r.Telemetry;
                 meteor.CameraDistance = Vector3.Distance(CameraPosition, meteorPos);
                 meteor.Apply(t, velocityDir, (float)s.Speed, s.PancakeDiameter, dt);
-                if (t.Broken && !wasBroken)
-                {
-                    wasBroken = true;
-                    SimulationSignals.RaiseToast("Break-up at " + (t.Altitude / 1000.0).ToString("0.0") + " km");
-                }
+                // (the HUD announces break-up itself from the telemetry)
+                wasBroken |= t.Broken;
 
                 predictTimer += Time.unscaledDeltaTime;
                 if (predictTimer > 1.0f && !r.HasEnded)
@@ -275,7 +301,10 @@ namespace MTS.Visuals
         }
 
         /// <summary>Called by the end sequence when the run ends: hide the body, let trails linger, cut to the observer.</summary>
-        public void OnRunEnded(EndReason reason, Vector3 focus, float viewRadius)
+        /// <param name="focus">The event point: the burst point for airbursts, ground zero (plus a little) for impacts.</param>
+        /// <param name="nearRadius">Radius (m) of what to frame first (fireball, crater, glow).</param>
+        /// <param name="farRadius">Radius (m) to pull back to by the end of the sequence (blast rings, dust).</param>
+        public void OnRunEnded(EndReason reason, Vector3 focus, float nearRadius, float farRadius)
         {
             ended = true;
             endFocus = focus;
@@ -283,18 +312,66 @@ namespace MTS.Visuals
             meteor.Extinguish();
             predictedLine.enabled = false;
 
-            // Elevated view over the ground-zero area from the observer's side, wide enough for the blast rings.
-            Vector3 groundZero = GroundPointBelow(focus);
-            Vector3 horiz = observerPos - groundZero;
+            // From the observer's side of ground zero, elevated; small events close, continent-scale ones from orbit.
+            endGroundZero = GroundPointBelow(focus);
+            Vector3 horiz = observerPos - endGroundZero;
             horiz.y = 0f;
-            horiz = horiz.sqrMagnitude > 1f ? horiz.normalized : -trackDir;
-            float burstHeight = Mathf.Max(0f, (focus - groundZero).magnitude);
-            float dist = Mathf.Clamp(Mathf.Max(viewRadius * 1.5f, burstHeight * 1.4f), 2500f, 140000f);
-            Vector3 pos = groundZero + horiz * dist + Vector3.up * dist * 0.22f;
-            Vector3 lookAt = groundZero + Vector3.up * Mathf.Min(burstHeight * 0.45f, dist * 0.3f) - horiz * dist * 0.05f;
-            vcams[3].transform.SetPositionAndRotation(pos, Quaternion.LookRotation(lookAt - pos, Vector3.up));
-            vcams[3].m_Lens.FieldOfView = 55f;
+            endHoriz = horiz.sqrMagnitude > 1f ? horiz.normalized : -trackDir;
+            float burstHeight = Mathf.Max(0f, (focus - endGroundZero).magnitude);
+            const float fov = 55f;
+            endNearDist = (float)ImpactVisualScale.EndCameraDistance(nearRadius, 0.0, fov, 60.0, 3.0e6);
+            endFarDist = Mathf.Max(endNearDist, (float)ImpactVisualScale.EndCameraDistance(farRadius, burstHeight * 0.6, fov, 60.0, 5.0e6));
+            endElevNear = Mathf.Lerp(12f, 30f, Mathf.InverseLerp(2000f, 200000f, endNearDist));
+            endElevFar = Mathf.Lerp(18f, 62f, Mathf.InverseLerp(20000f, 2.5e6f, endFarDist));
+            endLookHeight = burstHeight;
+            endProgress = 0f;
+            vcams[3].m_Lens.FieldOfView = fov;
             vcams[3].Priority = 30;
+            PlaceEndCamera();
+        }
+
+        /// <summary>Moves the end camera from the close framing (0) to the wide one (1).</summary>
+        public void SetEndProgress(float k)
+        {
+            endProgress = Mathf.Clamp01(k);
+            if (ended) PlaceEndCamera();
+        }
+
+        private void PlaceEndCamera()
+        {
+            float k = Mathf.SmoothStep(0f, 1f, endProgress);
+            float dist = Mathf.Exp(Mathf.Lerp(Mathf.Log(endNearDist), Mathf.Log(endFarDist), k));
+            float elev = Mathf.Lerp(endElevNear, endElevFar, k) * Mathf.Deg2Rad;
+            // the point of interest: the burst high up when close, ground zero when wide
+            float lookHeight = Mathf.Lerp(endLookHeight, Mathf.Min(endLookHeight, dist * 0.08f), k);
+            Vector3 target = endGroundZero + Vector3.up * lookHeight;
+            Vector3 pos = target + (endHoriz * Mathf.Cos(elev) + Vector3.up * Mathf.Sin(elev)) * dist;
+            pos = KeepAboveGround(pos, 40f + dist * 0.01f);
+            Vector3 up = (pos - EarthCentre).normalized;
+            vcams[3].transform.SetPositionAndRotation(pos, Quaternion.LookRotation(target - pos, up));
+            vcams[3].m_Lens.NearClipPlane = Mathf.Clamp(dist * 0.002f, 0.1f, 500f);
+            vcams[3].m_Lens.FarClipPlane = Mathf.Max(1.5e6f, dist * 4f);
+        }
+
+        private static readonly Vector3 EarthCentre = new Vector3(0f, -(float)PhysicalConstants.EarthRadius, 0f);
+
+        private static float AltitudeOf(Vector3 p) => (p - EarthCentre).magnitude - (float)PhysicalConstants.EarthRadius;
+
+        private static Vector3 KeepAboveGround(Vector3 p, float minAltitude)
+        {
+            float alt = AltitudeOf(p);
+            if (alt >= minAltitude) return p;
+            return p + (p - EarthCentre).normalized * (minAltitude - alt);
+        }
+
+        // Keeps a camera out of the cloud deck: it flies above it when the target is above, below it otherwise.
+        private Vector3 AvoidClouds(Vector3 p, Vector3 target)
+        {
+            float alt = AltitudeOf(p);
+            float lo = cloudHeight - 250f, hi = cloudHeight + 450f;
+            if (alt <= lo || alt >= hi) return p;
+            float want = AltitudeOf(target) > cloudHeight ? hi : lo;
+            return p + (p - EarthCentre).normalized * (want - alt);
         }
 
         private void UpdateMeteorPosition(in MeteorState s, float dt)
@@ -366,31 +443,66 @@ namespace MTS.Visuals
             side.Normalize();
             Vector3 camUp = Vector3.Cross(fwd, side).normalized;
 
-            // chase: just ahead of and beside the fireball, looking back along its train
-            float chaseDist = 16f * r + 12f;
-            Vector3 chasePos = meteorPos + fwd * chaseDist * 0.35f + side * chaseDist + camUp * chaseDist * 0.3f;
-            vcams[0].transform.SetPositionAndRotation(chasePos, Quaternion.LookRotation(meteorPos - fwd * chaseDist * 0.8f - chasePos, up));
+            float smooth = 1f - Mathf.Exp(-dt * 3f);
 
-            // ground observer: fixed spot, tracking the fireball but keeping some horizon in view
-            smoothedLook = Vector3.Lerp(smoothedLook, ended ? endFocus : meteorPos, 1f - Mathf.Exp(-dt * (ended ? 2f : 6f)));
-            Vector3 toMeteor = (smoothedLook - observerPos).normalized;
-            Vector3 horizon = new Vector3(toMeteor.x, 0f, toMeteor.z).normalized;
-            Vector3 look = Vector3.Slerp(toMeteor, horizon, ended ? 0.5f : 0.22f);
-            vcams[1].transform.SetPositionAndRotation(observerPos, Quaternion.LookRotation(look, Vector3.up));
+            // Chase: beside and a little above the fireball, looking slightly down across it so the ground and the
+            // horizon fill the background (not black space) and the train streams away diagonally. The distance
+            // follows the body and its glow, so the rock reads at any size.
+            float chaseDist = (float)ImpactVisualScale.ChaseDistance(meteor.Radius, meteor.SheathRadius, b);
+            Vector3 chaseOffset = (side * 1.0f + up * 0.42f + fwd * 0.22f).normalized;
+            Vector3 chasePos = meteorPos + chaseOffset * chaseDist;
+            Vector3 chaseTarget = meteorPos - fwd * chaseDist * 0.18f;
+            chasePos = AvoidClouds(KeepAboveGround(chasePos, 30f), meteorPos);
+            Vector3 chaseUp = Vector3.ProjectOnPlane(up, (chaseTarget - chasePos).normalized);
+            if (chaseUp.sqrMagnitude < 1e-4f) chaseUp = camUp;
+            vcams[0].transform.SetPositionAndRotation(chasePos, Quaternion.LookRotation(chaseTarget - chasePos, chaseUp));
+            chaseFov = Mathf.Lerp(chaseFov, 58f, smooth);
+            vcams[0].m_Lens.FieldOfView = chaseFov;
 
-            // side view: alongside at a distance that grows with the fireball
-            float d = Mathf.Max(150f, 60f * r) * (1f + 0.5f * b);
-            Vector3 sidePos = meteorPos + side * d + up * d * 0.12f - fwd * d * 0.35f;
-            vcams[2].transform.SetPositionAndRotation(sidePos, Quaternion.LookRotation(meteorPos + fwd * d * 0.25f - sidePos, up));
+            // Ground observer: fixed spot, leading the fireball a little; zooms with distance so the fireball stays
+            // a readable size, and keeps the horizon low in the frame whenever the fireball allows.
+            Vector3 lead = ended ? endFocus : meteorPos + velocityDir * Mathf.Min((float)runner.State.Speed * 0.35f, 6000f);
+            smoothedLook = Vector3.Lerp(smoothedLook, lead, 1f - Mathf.Exp(-dt * (ended ? 2f : 5f)));
+            Vector3 obsUp = (observerPos - EarthCentre).normalized;
+            Vector3 toLook = smoothedLook - observerPos;
+            float range = Mathf.Max(1f, toLook.magnitude);
+            Vector3 flat = Vector3.ProjectOnPlane(toLook, obsUp);
+            if (flat.sqrMagnitude < 1f) flat = Vector3.ProjectOnPlane(-observerPos, obsUp);
+            if (flat.sqrMagnitude < 1f) flat = trackDir;
+            flat.Normalize();
+            float elevation = Mathf.Asin(Mathf.Clamp(Vector3.Dot(toLook / range, obsUp), -1f, 1f)) * Mathf.Rad2Deg;
+            float span = Mathf.Max(4000f, meteor.SheathRadius * 60f, (float)runner.State.Speed * 1.2f);
+            float wantFov = Mathf.Clamp(2f * Mathf.Atan(span / range) * Mathf.Rad2Deg, 22f, 62f);
+            observerFov = Mathf.Lerp(observerFov, wantFov, smooth);
+            // aim so the fireball sits a little above centre, but never tip the horizon out of the bottom of the view
+            float aimElev = Mathf.Clamp(elevation - observerFov * 0.15f, -2f, 85f);
+            if (elevation < observerFov * 0.75f) aimElev = Mathf.Min(aimElev, observerFov * 0.38f);
+            Vector3 obsLook = flat * Mathf.Cos(aimElev * Mathf.Deg2Rad) + obsUp * Mathf.Sin(aimElev * Mathf.Deg2Rad);
+            vcams[1].transform.SetPositionAndRotation(observerPos, Quaternion.LookRotation(obsLook, obsUp));
+            vcams[1].m_Lens.FieldOfView = observerFov;
+
+            // Side view: alongside at the fireball's height, far enough to show the glow and a stretch of train,
+            // aiming a little ahead so the fireball leads into the frame and the horizon stays level.
+            float d = Mathf.Max(32f * meteor.Radius + 60f, 7f * meteor.SheathRadius) * (1f + 1.6f * b);
+            Vector3 flatSide = Vector3.ProjectOnPlane(side, up).normalized;
+            if (flatSide.sqrMagnitude < 1e-4f) flatSide = side;
+            Vector3 sidePos = meteorPos + flatSide * d + up * d * 0.1f - fwd * d * 0.25f;
+            sidePos = AvoidClouds(KeepAboveGround(sidePos, 30f), meteorPos);
+            Vector3 sideTarget = meteorPos + fwd * d * 0.22f;
+            vcams[2].transform.SetPositionAndRotation(sidePos, Quaternion.LookRotation(sideTarget - sidePos, up));
+            sideFov = Mathf.Lerp(sideFov, 55f, smooth);
+            vcams[2].m_Lens.FieldOfView = sideFov;
 
             // keep the far camera's near plane sensible for its height
-            float camAlt = (float)(CameraPosition - new Vector3(0, -(float)PhysicalConstants.EarthRadius, 0)).magnitude - (float)PhysicalConstants.EarthRadius;
+            float camAlt = AltitudeOf(CameraPosition);
             VisualsGlobals.SetCameraAltitude(Mathf.Max(0f, camAlt));
-            float near = Mathf.Clamp(r * 0.2f, 0.05f, 2f);
-            foreach (CinemachineVirtualCamera vc in vcams)
+            if (globe != null) globe.SetActive(camAlt > 90000f);
+            float near = Mathf.Clamp(meteor.Radius * 0.2f, 0.05f, 2f);
+            for (int i = 0; i < 3; i++)
             {
-                vc.m_Lens.NearClipPlane = vc == vcams[1] ? Mathf.Max(near, 1f) : near;
-                vc.m_Lens.FarClipPlane = 1.5e6f;
+                CinemachineVirtualCamera vc = vcams[i];
+                vc.m_Lens.NearClipPlane = i == 1 ? Mathf.Clamp(range * 0.0005f, 1f, 50f) : Mathf.Clamp(Mathf.Min(near, chaseDist * 0.05f), 0.05f, 500f);
+                vc.m_Lens.FarClipPlane = Mathf.Max(1.5e6f, d * 20f);
             }
         }
 
@@ -415,8 +527,8 @@ namespace MTS.Visuals
             farCamera.transform.SetPositionAndRotation(m.position, m.rotation);
             farCamera.fieldOfView = mainCamera.fieldOfView;
             float camAlt = (float)(m.position - new Vector3(0, -(float)PhysicalConstants.EarthRadius, 0)).magnitude - (float)PhysicalConstants.EarthRadius;
-            farCamera.nearClipPlane = Mathf.Clamp(camAlt * 0.02f, 0.5f, 400f);
-            farCamera.farClipPlane = 4.0e6f;
+            farCamera.nearClipPlane = Mathf.Clamp(camAlt * 0.02f, 0.5f, 2000f);
+            farCamera.farClipPlane = camAlt > 90000f ? 1.6e7f : 4.0e6f;
         }
     }
 }

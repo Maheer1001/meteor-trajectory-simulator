@@ -214,9 +214,120 @@ namespace MTS.Visuals
             var mesh = new Mesh { name = "Disc" };
             mesh.SetVertices(verts);
             var normals = new List<Vector3>();
-            for (int i = 0; i < verts.Count; i++) normals.Add(Vector3.up);
+            var uvs = new List<Vector2>();
+            for (int i = 0; i < verts.Count; i++)
+            {
+                normals.Add(Vector3.up);
+                uvs.Add(new Vector2(verts[i].x, verts[i].z));
+            }
+
             mesh.SetNormals(normals);
+            mesh.SetUVs(0, uvs);
             mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>
+        /// Disc of the given real radius (m) lying on the Earth's curved surface, its centre at the origin and the
+        /// sphere's centre at (0, -R, 0); <paramref name="lift"/> raises it above the ground. UV holds the flat unit-disc
+        /// coordinate (x, z) / radius, so the shockwave and crater shaders work for rings of any size, up to thousands
+        /// of kilometres where a flat disc would float far above the horizon.
+        /// </summary>
+        public static Mesh CurvedDisc(float radius, float lift = 0f, int segments = 160, int rings = 48)
+        {
+            const double R = MTS.Core.PhysicalConstants.EarthRadius;
+            var verts = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            verts.Add(new Vector3(0f, lift, 0f));
+            normals.Add(Vector3.up);
+            uvs.Add(Vector2.zero);
+            double rr = R + lift;
+            for (int ring = 1; ring <= rings; ring++)
+            {
+                // denser rings near the centre, where the camera usually is
+                double f = (double)ring / rings;
+                f = f * f * 0.5 + f * 0.5;
+                double theta = f * radius / R;
+                double horiz = rr * System.Math.Sin(theta);
+                double y = rr * System.Math.Cos(theta) - R;
+                for (int s = 0; s < segments; s++)
+                {
+                    double phi = s * 2.0 * System.Math.PI / segments;
+                    float c = (float)System.Math.Cos(phi), sn = (float)System.Math.Sin(phi);
+                    verts.Add(new Vector3((float)(horiz * c), (float)y, (float)(horiz * sn)));
+                    normals.Add(new Vector3((float)System.Math.Sin(theta) * c, (float)System.Math.Cos(theta), (float)System.Math.Sin(theta) * sn));
+                    uvs.Add(new Vector2((float)f * c, (float)f * sn));
+                }
+            }
+
+            for (int s = 0; s < segments; s++)
+            {
+                tris.Add(0);
+                tris.Add(1 + (s + 1) % segments);
+                tris.Add(1 + s);
+            }
+
+            for (int ring = 0; ring < rings - 1; ring++)
+            {
+                int a0 = 1 + ring * segments, b0 = 1 + (ring + 1) * segments;
+                for (int s = 0; s < segments; s++)
+                {
+                    int s1 = (s + 1) % segments;
+                    tris.Add(a0 + s); tris.Add(a0 + s1); tris.Add(b0 + s);
+                    tris.Add(a0 + s1); tris.Add(b0 + s1); tris.Add(b0 + s);
+                }
+            }
+
+            var mesh = new Mesh { name = "CurvedDisc", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>
+        /// Open frustum (unit base radius at y = 0, flaring out to <paramref name="topRadius"/> at y = 1) for the ejecta
+        /// curtain. UV: x = around (0..1), y = up (0..1).
+        /// </summary>
+        public static Mesh Frustum(float topRadius = 2f, int segments = 96, int rows = 12)
+        {
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            for (int row = 0; row <= rows; row++)
+            {
+                float v = (float)row / rows;
+                float r = Mathf.Lerp(1f, topRadius, v);
+                for (int s = 0; s <= segments; s++)
+                {
+                    float u = (float)s / segments;
+                    float a = u * Mathf.PI * 2f;
+                    verts.Add(new Vector3(Mathf.Cos(a) * r, v, Mathf.Sin(a) * r));
+                    uvs.Add(new Vector2(u, v));
+                }
+            }
+
+            int w = segments + 1;
+            for (int row = 0; row < rows; row++)
+            {
+                for (int s = 0; s < segments; s++)
+                {
+                    int a = row * w + s, b = a + w;
+                    tris.Add(a); tris.Add(b); tris.Add(a + 1);
+                    tris.Add(a + 1); tris.Add(b); tris.Add(b + 1);
+                }
+            }
+
+            var mesh = new Mesh { name = "Frustum" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
         }

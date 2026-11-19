@@ -40,7 +40,7 @@ namespace MTS.Visuals
         private Vec3d lastPastSample;
         private Vector3 sunDisplay;
         private int mode;
-        private float yaw = 15f, pitch = 8f, zoom = 1f;
+        private float yaw, pitch, zoom = 1f;
         private Vec3d camPos;
         private Quaternion camRot = Quaternion.identity;
         private Vec3d blendFromPos;
@@ -204,6 +204,7 @@ namespace MTS.Visuals
             HandleInput();
             MeteorState s = r.State;
             VisualsGlobals.SetSun(sunDisplay, sunColor, sunIntensity);
+            VisualsGlobals.SetAsh(0f);
             VisualsGlobals.SetEarthRotation(s.Time);
             if (sun != null)
             {
@@ -255,16 +256,61 @@ namespace MTS.Visuals
             float pixelSize = 2f * Mathf.Tan(farCamera.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1, farCamera.pixelHeight);
             marker.localScale = Vector3.one * Mathf.Max(distKm * pixelSize * 34f, 0.001f);
             marker.gameObject.SetActive(distKm > 50f);
-            float earthDist = (float)(camPos.Magnitude / KmPerUnit);
-            impactMarker.localScale = Vector3.one * Mathf.Max(earthDist * pixelSize * 22f, 0.01f);
-            float lineWidth = Mathf.Max(earthDist, distKm) * pixelSize * 2.2f;
-            pastLine.widthMultiplier = lineWidth;
-            futureLine.widthMultiplier = lineWidth * 0.8f;
+            float endDist = (impactMarker.position).magnitude;
+            impactMarker.localScale = Vector3.one * Mathf.Max(endDist * pixelSize * 22f, 0.01f);
+            // Constant on-screen width: a line's width is in world units, so a path passing near the camera would
+            // otherwise become a huge beam. Width keys follow each part's distance from the camera.
+            ScreenWidth(pastLine, pixelSize * 2.4f);
+            ScreenWidth(futureLine, pixelSize * 1.9f);
             // In the close-up the camera sits on the path itself, where a screen-sized line would become a wall.
             bool showPaths = mode != 0 || blend < 0.5f;
             pastLine.enabled = showPaths;
             futureLine.enabled = showPaths;
             impactMarker.gameObject.SetActive(showPaths);
+        }
+
+        private readonly Keyframe[] widthKeys = new Keyframe[24];
+        private readonly AnimationCurve widthCurve = new AnimationCurve();
+
+        /// <summary>Sets a line's width curve so it is about <paramref name="radiansWide"/> wide on screen everywhere.</summary>
+        private void ScreenWidth(LineRenderer line, float radiansWide)
+        {
+            int n = line.positionCount;
+            if (n < 2) return;
+            Transform t = line.transform;
+            float total = 0f;
+            Vector3 prev = t.TransformPoint(line.GetPosition(0));
+            var cumulative = new float[n];
+            var dist = new float[n];
+            dist[0] = prev.magnitude; // the far camera sits at the origin
+            for (int i = 1; i < n; i++)
+            {
+                Vector3 p = t.TransformPoint(line.GetPosition(i));
+                total += Vector3.Distance(prev, p);
+                cumulative[i] = total;
+                dist[i] = p.magnitude;
+                prev = p;
+            }
+
+            if (!(total > 0f)) return;
+            int keys = widthKeys.Length;
+            int j = 0;
+            for (int k = 0; k < keys; k++)
+            {
+                float u = k / (keys - 1f);
+                float target = u * total;
+                while (j < n - 2 && cumulative[j + 1] < target) j++;
+                float seg = cumulative[j + 1] - cumulative[j];
+                float f = seg > 0f ? Mathf.Clamp01((target - cumulative[j]) / seg) : 0f;
+                float d = Mathf.Lerp(dist[j], dist[j + 1], f);
+                // the nearest stretch decides the key, so a vertex right beside the camera never balloons
+                widthKeys[k] = new Keyframe(u, Mathf.Max(d * radiansWide, 1e-4f));
+            }
+
+            widthCurve.keys = widthKeys;
+            for (int k = 0; k < keys; k++) widthCurve.SmoothTangents(k, 0f);
+            line.widthCurve = widthCurve;
+            line.widthMultiplier = 1f;
         }
 
         private void RecordPast(in MeteorState s)
@@ -335,29 +381,49 @@ namespace MTS.Visuals
             {
                 case 0:
                 {
-                    // Default view: from the sunlit side and away from the Earth, so the lit rock sits against the
-                    // planet; yaw/pitch orbit around that.
+                    // Close-up: look slightly down past the rock so the Earth's limb sits in the upper part of the
+                    // frame behind it, side-lit by the Sun; yaw/pitch orbit around that.
                     double dist = System.Math.Max(meteor != null ? meteor.Radius : 1.0, 0.5) * 6.5 * zoom;
                     Vector3 radialUp = -toEarthF;
-                    Vector3 baseOffset = (radialUp * 0.55f + sunDisplay.normalized * 0.85f);
-                    if (baseOffset.sqrMagnitude < 1e-4f) baseOffset = radialUp;
-                    baseOffset.Normalize();
-                    Vector3 refUp = Vector3.Cross(baseOffset, side);
-                    if (refUp.sqrMagnitude < 1e-4f) refUp = Vector3.up;
-                    Quaternion orbitBasis = Quaternion.LookRotation(-baseOffset, refUp);
-                    Vector3 offset = orbitBasis * Quaternion.Euler(pitch, yaw, 0f) * Vector3.back;
-                    pos = m + ToVec(offset) * dist;
-                    rot = Quaternion.LookRotation(-offset, orbitBasis * Vector3.up);
+                    double alt = System.Math.Max(1000.0, m.Magnitude - earthR);
+                    float limbDip = (float)(System.Math.Acos(earthR / (earthR + alt)) * 180.0 / System.Math.PI);
+                    float vfov = nearCamera != null ? nearCamera.fieldOfView : 50f;
+                    float dip = Mathf.Clamp(limbDip + 0.22f * vfov + pitch, -60f, 88f);
+                    Vector3 sunH = Vector3.ProjectOnPlane(sunDisplay.normalized, radialUp);
+                    if (sunH.sqrMagnitude < 1e-4f) sunH = side;
+                    sunH.Normalize();
+                    Vector3 horiz = Quaternion.AngleAxis(105f + yaw, radialUp) * sunH;
+                    Vector3 view = (horiz * Mathf.Cos(dip * Mathf.Deg2Rad) - radialUp * Mathf.Sin(dip * Mathf.Deg2Rad)).normalized;
+                    pos = m - ToVec(view) * dist;
+                    rot = Quaternion.LookRotation(view, radialUp);
                     break;
                 }
                 case 1:
                 {
-                    double range = m.Magnitude;
-                    Vec3d target = m * 0.55;
-                    double extent = System.Math.Max(range * 0.8, earthR * 2.2) * zoom;
-                    Vector3 offset = basis * Quaternion.Euler(18f + pitch * 0.3f, 62f + yaw * 0.3f, 0f) * Vector3.back;
-                    pos = target + ToVec(offset) * extent;
-                    rot = Quaternion.LookRotation(VisualsGlobals.ToVector3((target - pos).Normalized), basis * Vector3.up);
+                    // Earth and meteor: from higher up and behind, the meteor marker in the lower-middle of the
+                    // frame against the planet, the curved limb across the upper part.
+                    double alt = System.Math.Max(1000.0, m.Magnitude - earthR);
+                    Vector3 radialUp = -toEarthF;
+                    float vfov = farCamera != null ? farCamera.fieldOfView : 50f;
+                    Vector3 sunH = Vector3.ProjectOnPlane(sunDisplay.normalized, radialUp);
+                    if (sunH.sqrMagnitude < 1e-4f) sunH = side;
+                    sunH.Normalize();
+                    Vector3 horiz = Quaternion.AngleAxis(105f + yaw * 0.5f, radialUp) * sunH;
+                    double d = System.Math.Max(System.Math.Min(alt * 1.3, 1.2e7), 700000.0) * zoom;
+                    // the camera's own altitude sets where the limb is; two passes settle it
+                    float meteorDip = 40f, viewDip = 30f;
+                    for (int it = 0; it < 3; it++)
+                    {
+                        double camAlt = alt + d * System.Math.Sin(meteorDip * Mathf.Deg2Rad);
+                        float limbDip = (float)(System.Math.Acos(earthR / (earthR + camAlt)) * 180.0 / System.Math.PI);
+                        viewDip = Mathf.Clamp(limbDip + 0.26f * vfov + pitch * 0.5f, 5f, 85f);
+                        meteorDip = Mathf.Clamp(viewDip + 0.14f * vfov, 5f, 88f);
+                    }
+
+                    Vector3 toMeteor = (horiz * Mathf.Cos(meteorDip * Mathf.Deg2Rad) - radialUp * Mathf.Sin(meteorDip * Mathf.Deg2Rad)).normalized;
+                    Vector3 look = (horiz * Mathf.Cos(viewDip * Mathf.Deg2Rad) - radialUp * Mathf.Sin(viewDip * Mathf.Deg2Rad)).normalized;
+                    pos = m - ToVec(toMeteor) * d;
+                    rot = Quaternion.LookRotation(look, radialUp);
                     break;
                 }
                 default:
@@ -372,7 +438,7 @@ namespace MTS.Visuals
                     if (Vector3.Dot(n, sunDisplay) < 0f) n = -n;
                     Vector3 offset = (n + sunDisplay.normalized * 0.45f + (-toEarthF) * 0.2f).normalized;
                     offset = Quaternion.AngleAxis(yaw * 0.3f, n) * offset;
-                    double dist = rad / System.Math.Tan(farCamera.fieldOfView * 0.5 * System.Math.PI / 180.0) * 1.1 * zoom;
+                    double dist = rad / System.Math.Tan(farCamera.fieldOfView * 0.5 * System.Math.PI / 180.0) * 1.22 * zoom;
                     pos = c + ToVec(offset) * dist;
                     Vector3 upHint = Vector3.Cross(offset, Vector3.Cross(-toEarthF, offset));
                     if (upHint.sqrMagnitude < 1e-4f) upHint = Vector3.up;

@@ -39,7 +39,7 @@ Shader "MTS/Crater"
             {
                 v2f o;
                 o.pos = UnityObjectToClipPos(v.vertex);
-                o.p = v.vertex.xz * 2.5; // mesh radius = 2.5 crater radii
+                o.p = v.texcoord.xy * 2.5; // mesh radius = 2.5 crater radii (unit-disc UV)
                 return o;
             }
 
