@@ -10,24 +10,36 @@ A Unity simulation of a meteor falling towards Earth. You set the meteor's prope
 
 ## What it simulates
 
-- **Space stage:** gravitational acceleration towards Earth, integrated each physics step with **4th-order Runge-Kutta (RK4)**. The meteor's temperature changes by radiative heat loss to space (Stefan-Boltzmann).
-- **Atmosphere stage** (from about 85 km altitude):
-  - Air temperature and pressure that change with altitude across three layers
-  - Drag, using a Reynolds-number-based drag coefficient correlation for a sphere
-  - Heating and cooling from aerodynamic heating, convective cooling (Nusselt number) and radiative cooling
-  - Mass loss (ablation), with the meteor's radius recalculated from its mass and density
+The physics is in a separate, unit-tested C# library (`Assets/Scripts/Core`); [docs/PHYSICS.md](docs/PHYSICS.md) gives the equations, units, assumptions and references.
+
+- **Space stage:** 3-D motion under Earth's central gravity, integrated with **4th-order Runge-Kutta (RK4)** at a fixed step size. Two start modes:
+  - **Classic NEA** (default): released from rest at the chosen coordinates.
+  - **Realistic entry:** an inbound path that reaches the atmosphere at 17 km/s and 45° by default.
+- **Atmosphere stage** (from 120 km altitude):
+  - Air temperature, pressure and density from the **U.S. Standard Atmosphere 1976**
+  - Drag from the velocity relative to the (wind-blown) air, with a drag coefficient that depends on Mach and Knudsen number
+  - Heating and **ablation** from single-body meteor theory, with a stable (implicit) temperature update and a radiative-equilibrium starting temperature of about 278 K
+  - **Fragmentation and airburst** using the "pancake" model from the Earth Impact Effects Program (EIEP): break-up when ram pressure exceeds the material strength
   - Wind speed and direction set with sliders
-  - The meteor disintegrates if its mass or radius falls below a threshold
+  - The run ends in a ground impact, an airburst, or the meteor ablating away; every outcome goes to the results screen
 - **Collision stage:**
-  - Kinetic energy, crater radius, and impact radii for a set of overpressure levels, drawn as rings on an Earth map
-  - The impact position is converted to latitude/longitude (allowing for Earth's rotation, axial tilt and precession) and reverse-geocoded to a place name, or "Location is in the sea"
-  - A graph of distance travelled over time, sampled every 1, 10 or 30 minutes depending on how long the fall took
+  - Impact energy, crater size (transient and final, simple or complex) and blast radii for nine overpressure levels, from Collins, Melosh & Marcus (2005), drawn as rings on an Earth map
+  - The end position is converted to latitude/longitude (allowing for Earth's rotation) and reverse-geocoded to a place name, or "Location is in the sea"
+  - A graph of distance travelled over time
 
 ## Inputs and controls
 
-- **Variable input screen:** mass (5,000 to 60,000 kg), density (1,000 to 8,000 kg/m³), specific heat capacity (10 to 100), surface condition factor (0 to 1), and the X/Y/Z starting coordinates (-50 to -1 or 1 to 50). Values outside a range are clamped.
-- **Time-scale slider** speeds the simulation up or slows it down.
-- **Pause / play** saves the simulation state on a stack and restores it.
+- **Variable input screen:**
+  - mass: 5,000 to 60,000 kg
+  - density: 1,000 to 8,000 kg/m³
+  - specific heat capacity: 400 to 1,500 J/(kg·K)
+  - surface condition factor: 0 to 1
+  - X/Y/Z starting coordinates: -50 to -1 or 1 to 50 (one unit is 4,050 km)
+
+  Values outside a range are clamped. Blank fields use mid-range defaults. Either `.` or `,` works as the decimal mark.
+- **Time-scale slider** speeds the simulation up or slows it down. The step size stays fixed; a faster time scale just takes more steps per frame.
+- **Pause / play** pauses and resumes the simulation. Restart clears the run completely.
+- **Start mode:** until there is a button for it, choose the mode with the `Realistic Entry Mode` option on the space scene's `Meteor_Force` component, or with the command-line arguments `-mtsMode realistic`, `-mtsEntrySpeed 17000` and `-mtsEntryAngle 45`.
 - **Collision map:** mouse wheel to zoom, arrow keys / WASD to pan.
 - The main menu has Start, Continue, Restart, Exit, and a More Information screen that links to background reading (RK4, drag coefficients, overpressure levels).
 
@@ -93,10 +105,23 @@ The code that loads the key is `ApiKeyLoader` in `Assets/Scripts/Collision/Coord
 ## Project layout
 
 ```
-Assets/Scripts/Space/        RK4 gravity and space heat loss (Meteor_Force.cs)
-Assets/Scripts/Atmosphere/   Drag, heating, ablation, wind (AtmosphereForce.cs)
-Assets/Scripts/Collision/    Crater/blast radii, lat/long + geocoding, graph, map zoom
+Assets/Scripts/Core/         Physics library (MTS.Core): USSA76 atmosphere, gravity, drag, heating/ablation,
+                             fragmentation, RK4, impact model, simulation runner and session
+Assets/Scripts/Session/      Glue between the input screen and the simulation session
+Assets/Scripts/Space/        Space-stage screen (Meteor_Force.cs)
+Assets/Scripts/Atmosphere/   Atmosphere-stage screen, time and wind sliders (AtmosphereForce.cs)
+Assets/Scripts/Collision/    Results screen: crater/blast radii, lat/long + geocoding, graph, map zoom
 Assets/Scripts/Inputs/       Range-checked user inputs
 Assets/Scripts/Main menu/    Scene navigation and info links
+Assets/Tests/EditMode/       Unit tests for the physics library
 Assets/Scenes/               The six scenes
+docs/PHYSICS.md              The physics model, equations and references
+```
+
+## Running the tests
+
+In the Unity Editor, open **Window → General → Test Runner** and run the **EditMode** tests. Or run them from the command line (without `-quit`):
+
+```powershell
+& "C:\Program Files\Unity 2022.3.7f1\Editor\Unity.exe" -batchmode -nographics -projectPath . -runTests -testPlatform EditMode -testResults results.xml -logFile test.log
 ```
