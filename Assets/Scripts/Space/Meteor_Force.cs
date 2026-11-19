@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Globalization;
 using MTS.Core;
+using MTS.Hud;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -10,6 +11,8 @@ using UnityEngine.SceneManagement;
 /// All physics lives in MTS.Core; the run state lives in <see cref="SimulationSession"/>.
 /// The scene contains more than one Meteor_Force (one on the UI root, one on the meteor prefab); only one of them
 /// drives the simulation, every instance renders it.
+/// When the runtime HUD is attached (see MTS.Hud.HudBootstrap) the time warp, launch hold and readouts come from the
+/// HUD via <see cref="SimulationClock"/>; the legacy UI fields below are optional and may be null or hidden.
 /// </summary>
 public class Meteor_Force : MonoBehaviour
 {
@@ -24,6 +27,9 @@ public class Meteor_Force : MonoBehaviour
     public UnityEngine.UI.Slider slider;
     public string sceneName;
 
+    [Tooltip("Real seconds to wait after the run ends before opening the results scene (lets the HUD show the end event).")]
+    public float endTransitionDelay = 1.5f;
+
     [Header("Start mode (temporary, until a toggle is added to the input screen)")]
     [Tooltip("Off: classic NEA release from rest. On: inbound path reaching the atmosphere at the entry speed and angle below.")]
     public bool realisticEntryMode = false;
@@ -32,6 +38,7 @@ public class Meteor_Force : MonoBehaviour
 
     private static Meteor_Force driver;
     private static bool warnedAboutCap;
+    private float leaveAt = -1f;
 
     void Start()
     {
@@ -74,17 +81,19 @@ public class Meteor_Force : MonoBehaviour
 
         SimulationSession session = SimulationSession.Instance;
         SimulationRunner runner = session.Runner;
-        if (runner == null || session.IsPaused)
+        if (runner == null || session.IsPaused || SimulationClock.HoldForLaunch)
         {
             return;
         }
 
         if (runner.Stage == SimulationStage.Space)
         {
-            // The time-scale slider sets simulated seconds per physics tick; the step size itself stays fixed.
-            double simSeconds = (slider != null ? slider.value : 1f) / 60.0;
+            // Simulated seconds per physics tick: from the HUD's time warp, else from the legacy slider.
+            // The step size itself stays fixed; a faster warp only takes more steps.
+            double simSeconds = SimulationClock.TickSeconds((slider != null ? slider.value : 1f) / 60.0);
             AdvanceReport report = runner.Advance(simSeconds);
-            if (report.Capped && !warnedAboutCap)
+            SimulationClock.Report(report);
+            if (report.Capped && !warnedAboutCap && !SimulationClock.ExternalControl)
             {
                 warnedAboutCap = true;
                 Debug.LogWarning("Simulation is running slower than the selected time scale (step cap reached).");
@@ -97,6 +106,11 @@ public class Meteor_Force : MonoBehaviour
     void Update()
     {
         UpdateView();
+        if (leaveAt >= 0f && Time.unscaledTime >= leaveAt)
+        {
+            leaveAt = -1f;
+            SceneManager.LoadScene(SimulationInputs.ResultsScene, LoadSceneMode.Single);
+        }
     }
 
     private void LeaveIfStageChanged(SimulationRunner runner)
@@ -112,7 +126,10 @@ public class Meteor_Force : MonoBehaviour
                 Debug.LogError("Simulation stopped: " + runner.Result.Message);
             }
 
-            SceneManager.LoadScene(SimulationInputs.ResultsScene, LoadSceneMode.Single);
+            if (leaveAt < 0f)
+            {
+                leaveAt = Time.unscaledTime + Mathf.Max(0f, endTransitionDelay);
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using MTS.Core;
+using MTS.Hud;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -9,6 +10,8 @@ using UnityEngine.SceneManagement;
 /// Atmosphere-stage adapter: reads the time and wind sliders, advances the shared simulation and shows its state.
 /// Every end of the run (impact, airburst, ablated away, error, timeout) goes to the results scene.
 /// All physics lives in MTS.Core; the run state lives in <see cref="SimulationSession"/>.
+/// When the runtime HUD is attached (see MTS.Hud.HudBootstrap) the time warp and wind come from the HUD via
+/// <see cref="SimulationClock"/>; the legacy UI fields below are optional and may be null or hidden.
 /// </summary>
 public class Atmosphere_Force : MonoBehaviour
 {
@@ -29,7 +32,11 @@ public class Atmosphere_Force : MonoBehaviour
     public string sceneName1;
     public string sceneName2;
 
+    [Tooltip("Real seconds to wait after the run ends before opening the results scene (lets the HUD show the end event).")]
+    public float endTransitionDelay = 1.5f;
+
     private static bool warnedAboutCap;
+    private float leaveAt = -1f;
 
     private void Start()
     {
@@ -48,7 +55,7 @@ public class Atmosphere_Force : MonoBehaviour
     {
         SimulationSession session = SimulationSession.Instance;
         SimulationRunner runner = session.Runner;
-        if (runner == null || session.IsPaused)
+        if (runner == null || session.IsPaused || SimulationClock.HoldForLaunch)
         {
             return;
         }
@@ -56,35 +63,47 @@ public class Atmosphere_Force : MonoBehaviour
         Windspeed();
         if (!runner.HasEnded)
         {
-            double simSeconds = (slider != null ? slider.value : 1f) / 60.0;
+            double simSeconds = SimulationClock.TickSeconds((slider != null ? slider.value : 1f) / 60.0);
             AdvanceReport report = runner.Advance(simSeconds, SimulationRunner.DefaultMaxStepsPerAdvance, false);
-            if (report.Capped && !warnedAboutCap)
+            SimulationClock.Report(report);
+            if (report.Capped && !warnedAboutCap && !SimulationClock.ExternalControl)
             {
                 warnedAboutCap = true;
                 Debug.LogWarning("Simulation is running slower than the selected time scale (step cap reached).");
             }
         }
 
-        if (runner.HasEnded)
+        if (runner.HasEnded && leaveAt < 0f)
         {
             if (runner.Result.Reason == EndReason.Error)
             {
                 Debug.LogError("Simulation stopped: " + runner.Result.Message);
             }
 
-            string results = string.IsNullOrEmpty(sceneName2) ? SimulationInputs.ResultsScene : sceneName2;
-            SceneManager.LoadScene(results, LoadSceneMode.Single);
+            leaveAt = Time.unscaledTime + Mathf.Max(0f, endTransitionDelay);
         }
     }
 
     void Update()
     {
         UpdateView();
+        if (leaveAt >= 0f && Time.unscaledTime >= leaveAt)
+        {
+            leaveAt = -1f;
+            string results = string.IsNullOrEmpty(sceneName2) ? SimulationInputs.ResultsScene : sceneName2;
+            SceneManager.LoadScene(results, LoadSceneMode.Single);
+        }
     }
 
     // Bound to the wind sliders' On Value Changed events; also applied every physics tick.
+    // Ignored while the HUD's wind compass owns the wind.
     public void Windspeed()
     {
+        if (SimulationClock.ExternalWind)
+        {
+            return;
+        }
+
         double speed = slider2 != null ? slider2.value : SimulationSession.DefaultWindSpeed;
         double direction = slider3 != null ? slider3.value : SimulationSession.DefaultWindDirection;
         SimulationSession.Instance.SetWind(speed, direction);
