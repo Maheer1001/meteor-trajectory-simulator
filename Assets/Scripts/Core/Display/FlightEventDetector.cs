@@ -90,10 +90,10 @@ namespace MTS.Core.Display
                 switch (result.Reason)
                 {
                     case EndReason.Impact:
-                        Fire(events, FlightEvent.Impact, "Impact at " + UnitFormat.Speed(result.ImpactSpeed));
+                        Fire(events, FlightEvent.Impact, ImpactMessage(result.MassAtEnd, result.ImpactSpeed));
                         break;
                     case EndReason.Airburst:
-                        Fire(events, FlightEvent.Airburst, "Airburst at " + UnitFormat.Distance(result.EndAltitude));
+                        Fire(events, FlightEvent.Airburst, AirburstMessage(result.EndAltitude, result.BreakupEnergy));
                         break;
                     case EndReason.Disintegrated:
                         Fire(events, FlightEvent.Disintegration, "Disintegrated at " + UnitFormat.Distance(result.EndAltitude));
@@ -126,6 +126,20 @@ namespace MTS.Core.Display
             {
                 events.Add((e, message));
             }
+        }
+
+        /// <summary>Impact toast text: kinetic energy as TNT and the ground-impact speed, e.g. "59.8 Tt TNT at 20.00 km/s".</summary>
+        public static string ImpactMessage(double mass, double speed)
+        {
+            double energy = 0.5 * mass * speed * speed;
+            return energy > 0 ? UnitFormat.Energy(energy) + " at " + UnitFormat.Speed(speed) : "Ground impact at " + UnitFormat.Speed(speed);
+        }
+
+        /// <summary>Airburst toast text: altitude and (when known) the energy released, e.g. "At 27.3 km, 518 kt TNT".</summary>
+        public static string AirburstMessage(double altitude, double energy)
+        {
+            string at = "At " + UnitFormat.Distance(altitude);
+            return energy > 0 ? at + ", " + UnitFormat.Energy(energy) : at;
         }
 
         /// <summary>Short toast title for an event.</summary>
