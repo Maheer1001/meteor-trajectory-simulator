@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 164e5e386b28aab44bf3cc7eb5514842, type: 3}
+  m_Name: VisualsLibrary
+  m_EditorClassIdentifier: 
+  earth: {fileID: 2100000, guid: 58875fb78e0bb6240a7061f69edb516e, type: 2}
+  atmosphereShell: {fileID: 2100000, guid: f78889ba06a85874898a8d2a248ed6b6, type: 2}
+  starfield: {fileID: 2100000, guid: 499900bbb6753e34faec707e7bbfd000, type: 2}
+  atmosphereSky: {fileID: 2100000, guid: 89637fb98954d2746b7ab969bdae8c5c, type: 2}
+  ground: {fileID: 2100000, guid: 3d5856f889a0f434a9fb4b2c7242ad15, type: 2}
+  cloudDeck: {fileID: 2100000, guid: 5b4915135e196cc459c952b4dcb82cf8, type: 2}
+  meteorRock: {fileID: 2100000, guid: 85f978925bb30e245aab9bdc4e355a0b, type: 2}
+  plasma: {fileID: 2100000, guid: 53641a9c3326e184b8649b5a05100a12, type: 2}
+  glow: {fileID: 2100000, guid: 77e14ede03f9707498414560ebd21d7d, type: 2}
+  ionTrail: {fileID: 2100000, guid: 7c4d56b9ae33e924e996cdcfc2beb156, type: 2}
+  sparks: {fileID: 2100000, guid: ab7428190b27f314fbac96b485a5f40a, type: 2}
+  smoke: {fileID: 2100000, guid: 900b4668a8750b0418aa6d2776face45, type: 2}
+  debris: {fileID: 2100000, guid: ae105e2562333af4495da997b5027764, type: 2}
+  pathPast: {fileID: 2100000, guid: 398ce3049dbe8de41b16955201908a45, type: 2}
+  pathFuture: {fileID: 2100000, guid: a7b1c1e0241b27446a0d88cd1d855f42, type: 2}
+  marker: {fileID: 2100000, guid: 70014dcffa745eb47a333b286e156c31, type: 2}
+  shockwave: {fileID: 2100000, guid: c713695dc8c9f9143b9c1b0d468ff629, type: 2}
+  crater: {fileID: 2100000, guid: e06074c99679e9c4b94e2cf874f01532, type: 2}
+  dust: {fileID: 2100000, guid: c1979422176443a4098323682423a013, type: 2}
+  spaceProfile: {fileID: 11400000, guid: e644f795be07aa444b31a09a359af9de, type: 2}
+  atmosphereProfile: {fileID: 11400000, guid: a612741f3d2c7a0468ddcaaf2af8d5e9, type: 2}
+  flashProfile: {fileID: 11400000, guid: f4dad91cce626c240b6603cdc4805501, type: 2}
