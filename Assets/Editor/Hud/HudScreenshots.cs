@@ -175,7 +175,7 @@ namespace MTS.Hud.Editor
         private static bool LegacyCanvasEnabled()
         {
             GameObject legacy = GameObject.Find(LegacyUiHider.LegacyCanvasName);
-            return legacy != null && legacy.GetComponent<Canvas>().enabled;
+            return legacy != null && legacy.TryGetComponent(out Canvas c) && c.enabled;
         }
 
         private static IEnumerator Capture(string output, string name)

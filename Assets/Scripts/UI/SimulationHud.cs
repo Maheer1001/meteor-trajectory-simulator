@@ -433,6 +433,11 @@ namespace MTS.Hud
         private void UpdateLegend()
         {
             if (legendText == null) return;
+            // Camera names come from the active scene's visuals and vary in length: shrink to fit the bar.
+            legendText.enableWordWrapping = false;
+            legendText.enableAutoSizing = true;
+            legendText.fontSizeMax = 17;
+            legendText.fontSizeMin = 10;
             string[] names = SimulationSignals.CameraNames;
             string cams = names != null && names.Length > 0
                 ? string.Join("  ", System.Linq.Enumerable.Select(System.Linq.Enumerable.Take(names, 3), (n, i) => (i + 1) + " " + n))

@@ -87,7 +87,9 @@ public class Atmosphere_Force : MonoBehaviour
     void Update()
     {
         UpdateView();
-        if (leaveAt >= 0f && Time.unscaledTime >= leaveAt)
+        // The visuals' end sequence (slow motion, flash, blast rings) starts as soon as the run ends and holds the
+        // scene change until it has played; without it in the scene this returns false at once.
+        if (leaveAt >= 0f && !MTS.Visuals.EndSequence.HoldSceneChange() && Time.unscaledTime >= leaveAt)
         {
             leaveAt = -1f;
             string results = string.IsNullOrEmpty(sceneName2) ? SimulationInputs.ResultsScene : sceneName2;
