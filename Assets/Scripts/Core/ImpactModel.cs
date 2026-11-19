@@ -114,7 +114,8 @@ namespace MTS.Core
         /// Surface burst (zb = 0): Eq. 54. Airburst: inside the regular-reflection region p = p0 exp(-beta r1) with
         /// p0 = 3.14e11 z_b1^-2.6 and beta = 34.87 z_b1^-1.73 (Eqs. 55-56); beyond the Mach-stem radius
         /// r_m1 = 550 z_b1 / (1.2 (550 - z_b1)) (Eq. 58) Eq. 54 applies with r_x = 289 + 0.65 z_b1.
-        /// For z_b1 of 550 m or more there is no Mach region.
+        /// For z_b1 of 550 m or more there is no Mach region. An airburst result is never
+        /// below <see cref="HighAltitudeAirburstOverpressure"/>, which keeps high-altitude bursts physical.
         /// </summary>
         public static double PeakOverpressure(double groundRange, double energy, double burstAltitude)
         {
@@ -131,9 +132,15 @@ namespace MTS.Core
                 return SurfaceBurstOverpressure1Kt(r1);
             }
 
-            double zb1 = burstAltitude / scale;
-            double p0 = 3.14e11 * Math.Pow(zb1, -2.6);
-            double beta = 34.87 * Math.Pow(zb1, -1.73);
+            // The point-source model takes over where the EIEP fit (calibrated at modest scaled heights) underestimates
+            // high, small bursts; for low bursts the fit is the larger and is kept.
+            return Math.Max(EiepAirburstOverpressure(r1, burstAltitude / scale),
+                HighAltitudeAirburstOverpressure(groundRange, energy, burstAltitude));
+        }
+
+        /// <summary>EIEP airburst fit (Eqs. 55-58) at scaled ground range r1 and scaled burst altitude zb1 (m / kt^(1/3)).</summary>
+        public static double EiepAirburstOverpressure(double r1, double zb1)
+        {
             if (zb1 < 550.0)
             {
                 double rm1 = 550.0 * zb1 / (1.2 * (550.0 - zb1));
@@ -143,7 +150,49 @@ namespace MTS.Core
                 }
             }
 
+            double p0 = 3.14e11 * Math.Pow(zb1, -2.6);
+            double beta = 34.87 * Math.Pow(zb1, -1.73);
             return p0 * Math.Exp(-beta * r1);
+        }
+
+        /// <summary>Peak overpressure reflection factor at the ground for a weak shock (acoustic limit, rigid ground).</summary>
+        public const double GroundReflectionFactor = 2.0;
+
+        /// <summary>
+        /// Ground overpressure (Pa) of an airburst from a point-source model that stays valid for high, small bursts,
+        /// where the EIEP fit (calibrated on nuclear tests at modest scaled heights) extrapolates to almost nothing.
+        /// As in EIEP the meteor's energy is treated as an equivalent nuclear yield.
+        /// 1. Free-air blast: a surface burst on rigid ground behaves like a free-air burst of twice the yield
+        ///    (Glasstone and Dolan 1977, sec. 3.34), so the free-air overpressure of yield E at range R is the Eq. 54
+        ///    surface-burst curve for E/2.
+        /// 2. Sachs scaling to the ambient air at the burst altitude (Glasstone and Dolan 1977, sec. 3.64-3.66):
+        ///    dp_b = (p_b / p_0) P54(R (p_b / p_0)^(1/3) / (E_kt / 2)^(1/3)), with R the slant range from the burst.
+        /// 3. Downward propagation as a weak shock through the stratified atmosphere: along a ray the energy flux
+        ///    dp^2 / (rho c) times the ray-tube area is conserved, so the amplitude grows by
+        ///    sqrt(rho_g c_g / (rho_b c_b)) between the burst altitude and the ground (geometric acoustics, e.g.
+        ///    Pierce 1989, Acoustics, ch. 8). Refraction, absorption and nonlinear attenuation are ignored.
+        /// 4. Reflection at the ground doubles the incident overpressure (<see cref="GroundReflectionFactor"/>).
+        /// Checks: Chelyabinsk (about 500 kt at about 30 km; Brown et al. 2013, Nature 503, 238; Popova et al. 2013,
+        /// Science 342, 1069) gives about 1.6 kPa below the burst and 0.04 psi (window damage) out to about 120 km,
+        /// matching the observed window breakage up to about 120 km from the track. For low bursts (Tunguska-like,
+        /// 15 Mt at 8 km) it is within 10 % of the EIEP fit below the burst, so the EIEP results there are unchanged.
+        /// </summary>
+        public static double HighAltitudeAirburstOverpressure(double groundRange, double energy, double burstAltitude)
+        {
+            double ekt = energy / PhysicalConstants.JoulesPerKilotonTnt;
+            if (!(ekt > 0) || !(burstAltitude > 0))
+            {
+                return 0.0;
+            }
+
+            AtmosphereSample burst = Atmosphere.Sample(burstAltitude);
+            AtmosphereSample ground = Atmosphere.Sample(0.0);
+            double pressureRatio = burst.Pressure / ground.Pressure;
+            double slant = Math.Sqrt(burstAltitude * burstAltitude + groundRange * groundRange);
+            double r1 = slant * Math.Pow(pressureRatio, 1.0 / 3.0) / Math.Pow(0.5 * ekt, 1.0 / 3.0);
+            double freeAir = pressureRatio * SurfaceBurstOverpressure1Kt(r1);
+            double impedance = Math.Sqrt(ground.Density * ground.SpeedOfSound / (burst.Density * burst.SpeedOfSound));
+            return GroundReflectionFactor * freeAir * impedance;
         }
 
         /// <summary>Largest ground range (m) at which the peak overpressure is at least the given level; 0 if never.</summary>
