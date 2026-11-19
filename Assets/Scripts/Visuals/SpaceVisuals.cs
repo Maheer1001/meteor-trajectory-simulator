@@ -234,6 +234,7 @@ namespace MTS.Visuals
             }
 
             ApplyPose(s);
+            meteor.EnvironmentUp = VisualsGlobals.ToVector3(VisualFrame.ToDisplay(s.Position)).normalized;
             meteor.Apply(r.Telemetry, VisualsGlobals.ToVector3(VisualFrame.ToDisplay(s.Velocity)).normalized, (float)s.Speed, s.PancakeDiameter, Time.deltaTime);
         }
 

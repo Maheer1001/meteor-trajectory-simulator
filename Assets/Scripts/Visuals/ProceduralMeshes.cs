@@ -33,9 +33,11 @@ namespace MTS.Visuals
 
         /// <summary>
         /// Irregular rock: an icosphere squashed into an ellipsoid and displaced along its normals by fractal noise,
-        /// with a few impact pits. Radius ~1. Different seeds give different rocks.
+        /// with a few impact pits. Radius ~1. Different seeds give different rocks. <paramref name="lumpiness"/> (0..1)
+        /// turns it into a rubble pile: the union of a few dozen boulders around a smaller core.
+        /// Tangents are generated so the rock shader's tangent-space bump works.
         /// </summary>
-        public static Mesh Rock(int seed, int subdivisions = 5, float roughness = 0.22f, Vector3? axes = null)
+        public static Mesh Rock(int seed, int subdivisions = 5, float roughness = 0.22f, Vector3? axes = null, float lumpiness = 0f)
         {
             BuildIcosphere(subdivisions, out List<Vector3> verts, out List<int> tris);
             var rng = new System.Random(seed);
@@ -46,6 +48,19 @@ namespace MTS.Visuals
             {
                 Vector3 d = new Vector3((float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1).normalized;
                 pits.Add(new Vector4(d.x, d.y, d.z, 0.15f + (float)rng.NextDouble() * 0.25f));
+            }
+
+            var boulders = new List<Vector4>();
+            if (lumpiness > 0.01f)
+            {
+                var brng = new System.Random(seed * 31 + 7);
+                for (int i = 0; i < 34; i++)
+                {
+                    Vector3 d = new Vector3((float)brng.NextDouble() * 2 - 1, (float)brng.NextDouble() * 2 - 1, (float)brng.NextDouble() * 2 - 1).normalized;
+                    float rb = 0.22f + (float)brng.NextDouble() * 0.28f;
+                    Vector3 c = d * (1.0f - rb * 0.9f);
+                    boulders.Add(new Vector4(c.x, c.y, c.z, rb));
+                }
             }
 
             for (int i = 0; i < verts.Count; i++)
@@ -64,6 +79,22 @@ namespace MTS.Visuals
                     }
                 }
 
+                if (boulders.Count > 0)
+                {
+                    // distance to the far side of the outermost boulder hit by the ray from the centre
+                    float agg = 0.62f;
+                    foreach (Vector4 b in boulders)
+                    {
+                        var c = new Vector3(b.x, b.y, b.z);
+                        float along = Vector3.Dot(n, c);
+                        float disc = b.w * b.w - (c.sqrMagnitude - along * along);
+                        if (disc > 0f) agg = Mathf.Max(agg, along + Mathf.Sqrt(disc));
+                    }
+
+                    agg *= 1f + (Fbm(n * 6f + offset, 3) - 0.5f) * 0.12f;
+                    r = Mathf.Lerp(r, agg * 1.05f, lumpiness);
+                }
+
                 verts[i] = Vector3.Scale(n, shape) * r;
             }
 
@@ -73,6 +104,16 @@ namespace MTS.Visuals
             mesh.SetTriangles(tris, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
+            Vector3[] normals = mesh.normals;
+            var tangents = new Vector4[normals.Length];
+            for (int i = 0; i < normals.Length; i++)
+            {
+                Vector3 axis = Mathf.Abs(normals[i].y) < 0.95f ? Vector3.up : Vector3.right;
+                Vector3 t = Vector3.Cross(axis, normals[i]).normalized;
+                tangents[i] = new Vector4(t.x, t.y, t.z, 1f);
+            }
+
+            mesh.tangents = tangents;
             return mesh;
         }
 
