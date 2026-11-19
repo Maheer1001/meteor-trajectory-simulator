@@ -128,6 +128,31 @@ namespace MTS.Results
             return points;
         }
 
+        /// <summary>
+        /// Longitudes inside a small circle along one parallel: a point is inside when its great-circle angle c to the
+        /// centre is at most d = radius / R, i.e. sin(lat0) sin(lat) + cos(lat0) cos(lat) cos(dLon) &gt;= cos d. The
+        /// inside of any circle (even one wider than a hemisphere, or containing both poles) is therefore a single
+        /// longitude interval |dLon| &lt;= halfWidth on every parallel. Returns the half-width in degrees: 180 when the
+        /// whole parallel is inside, negative when none of it is.
+        /// </summary>
+        public static double HalfWidthAtLatitude(GeoPoint centre, double radius, double latitude)
+        {
+            double d = Math.Min(Math.PI, Math.Max(0.0, radius / PhysicalConstants.EarthRadius));
+            double p0 = centre.Lat * Deg;
+            double p = latitude * Deg;
+            double denom = Math.Cos(p0) * Math.Cos(p);
+            double num = Math.Cos(d) - Math.Sin(p0) * Math.Sin(p);
+            if (Math.Abs(denom) < 1e-12)
+            {
+                return num <= 0 ? 180.0 : -1.0;
+            }
+
+            double k = num / denom;
+            if (k <= -1.0) return 180.0;
+            if (k > 1.0) return -1.0;
+            return Math.Acos(k) / Deg;
+        }
+
         /// <summary>+1 if a circle of this radius around the centre contains the North Pole, -1 the South Pole, else 0.</summary>
         public static int EnclosedPole(GeoPoint centre, double radius)
         {
