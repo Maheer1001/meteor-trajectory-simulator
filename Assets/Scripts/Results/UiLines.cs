@@ -163,6 +163,34 @@ namespace MTS.Results
             }
         }
 
+        /// <summary>Dashed open polyline: dashes of the given length follow the path, continuing across vertices.</summary>
+        public void DashedPolyline(IList<Vector2> points, float width, float dash, float gap, Color color)
+        {
+            float phase = 0f;
+            for (int i = 0; i < points.Count - 1; i++)
+            {
+                Vector2 a = points[i];
+                Vector2 b = points[i + 1];
+                float length = Vector2.Distance(a, b);
+                if (length < 1e-4f) continue;
+                Vector2 dir = (b - a) / length;
+                float s = 0f;
+                while (s < length)
+                {
+                    float period = dash + gap;
+                    float inPeriod = phase % period;
+                    float step = Mathf.Max(1e-2f, Mathf.Min(length - s, inPeriod < dash ? dash - inPeriod : period - inPeriod));
+                    if (inPeriod < dash)
+                    {
+                        Segment(a + dir * s, a + dir * (s + step), width, color);
+                    }
+
+                    s += step;
+                    phase += step;
+                }
+            }
+        }
+
         /// <summary>Filled polygon as a triangle fan around a centre (exact for star-shaped outlines).</summary>
         public void Fan(Vector2 centre, IList<Vector2> outline, Color color)
         {

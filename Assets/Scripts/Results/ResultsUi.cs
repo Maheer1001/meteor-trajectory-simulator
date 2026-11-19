@@ -52,6 +52,32 @@ namespace MTS.Results
 
         public static readonly Color Crater = new Color(0.1f, 0.06f, 0.04f, 1f);
 
+        /// <summary>Hues of the non-blast effect layers (dashed rings on the map, card accents on the Effects tab).</summary>
+        public static readonly Color Thermal = new Color(1f, 0.62f, 0.2f);
+        public static readonly Color Seismic = new Color(0.78f, 0.55f, 1f);
+        public static readonly Color Ejecta = new Color(0.86f, 0.7f, 0.5f);
+        public static readonly Color Tsunami = new Color(0.3f, 0.82f, 1f);
+
+        public static Color GroupColor(EffectGroup group)
+        {
+            switch (group)
+            {
+                case EffectGroup.Thermal: return Thermal;
+                case EffectGroup.Seismic: return Seismic;
+                case EffectGroup.Ejecta: return Ejecta;
+                case EffectGroup.Tsunami: return Tsunami;
+                default: return Rings[0];
+            }
+        }
+
+        /// <summary>Ring colour of an effect layer: level 0 (strongest, innermost) is the brightest, outer rings fade.</summary>
+        public static Color EffectColor(EffectGroup group, int level)
+        {
+            Color c = GroupColor(group);
+            float k = Mathf.Clamp01(1f - 0.22f * level);
+            return new Color(Mathf.Lerp(0.55f, c.r, k), Mathf.Lerp(0.55f, c.g, k), Mathf.Lerp(0.6f, c.b, k), 1f);
+        }
+
         public static readonly Color[] Series =
         {
             new Color(1f, 0.32f, 0.28f),
@@ -138,7 +164,7 @@ namespace MTS.Results
                 t.fontSharedMaterial = font.material;
             }
 
-            t.text = text;
+            t.text = RichPowers(text);
             t.fontSize = size;
             t.color = color;
             t.alignment = alignment;
@@ -153,6 +179,13 @@ namespace MTS.Results
 
             return t;
         }
+
+        private static readonly System.Text.RegularExpressions.Regex PowerOfTen =
+            new System.Text.RegularExpressions.Regex(@"10\^(-?\d+)");
+
+        /// <summary>Turns plain "10^12" (from the culture-invariant formatters) into a TMP superscript.</summary>
+        public static string RichPowers(string text) =>
+            string.IsNullOrEmpty(text) || text.IndexOf('^') < 0 ? text ?? "" : PowerOfTen.Replace(text, "10<sup>$1</sup>");
 
         /// <summary>
         /// The menu's pixel box: drop shadow, fill and outline (9-slice sprites). Returns the container; content goes

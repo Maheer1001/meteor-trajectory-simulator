@@ -42,10 +42,10 @@ namespace MTS.Results
     /// </summary>
     public sealed class ChartView : MonoBehaviour
     {
-        private const float PadLeft = 104f;
+        private const float PadLeft = 110f;
         private const float PadBottom = 70f;
-        private const float PadRight = 30f;
-        private const float PadTop = 72f;
+        private const float PadRight = 36f;
+        private const float PadTop = 80f;
 
         private ChartSpec spec;
         private ResultsAssets assets;
@@ -63,12 +63,13 @@ namespace MTS.Results
             var root = (RectTransform)transform;
             ResultsUi.DestroyChildren(root);
 
-            TextMeshProUGUI title = ResultsUi.Text(root, "Title", spec.Title, assets.BodyFont, 26, ResultsTheme.Text, TextAlignmentOptions.TopLeft, true);
-            ResultsUi.TopBand(title.rectTransform, 14, 34, 24, 24);
+            TextMeshProUGUI title = ResultsUi.Heading(root, spec.Title.ToUpperInvariant(), assets, 30);
+            ResultsUi.TopBand(title.rectTransform, 22, 36, 32, 32);
             if (!string.IsNullOrEmpty(spec.Subtitle))
             {
-                TextMeshProUGUI sub = ResultsUi.Text(root, "Subtitle", spec.Subtitle, assets.BodyFont, 18, ResultsTheme.Muted, TextAlignmentOptions.TopRight);
-                ResultsUi.TopBand(sub.rectTransform, 20, 28, 24, 24);
+                TextMeshProUGUI sub = ResultsUi.Text(root, "Subtitle", spec.Subtitle, assets.BodyFont, 20, ResultsTheme.Muted, TextAlignmentOptions.TopRight);
+                sub.enableWordWrapping = false;
+                ResultsUi.TopBand(sub.rectTransform, 28, 28, 32, 32);
             }
 
             plotArea = ResultsUi.Stretch(ResultsUi.Node("Plot", root), PadLeft, PadBottom, PadRight, PadTop);
@@ -105,7 +106,7 @@ namespace MTS.Results
             for (int i = 0; i < xAxis.TickCount; i++)
             {
                 double v = xAxis.Tick(i);
-                TextMeshProUGUI t = ResultsUi.Text(plotArea, "XTick", ChartScale.Label(v, xAxis.Step), assets.BodyFont, 18,
+                TextMeshProUGUI t = ResultsUi.Text(plotArea, "XTick", ChartScale.Label(v, xAxis.Step), assets.BodyFont, 20,
                     ResultsTheme.Muted, TextAlignmentOptions.Top);
                 t.enableWordWrapping = false;
                 float f = (float)xAxis.Normalise(v);
@@ -116,7 +117,7 @@ namespace MTS.Results
             for (int i = 0; i < yAxis.TickCount; i++)
             {
                 double v = yAxis.Tick(i);
-                TextMeshProUGUI t = ResultsUi.Text(plotArea, "YTick", ChartScale.Label(v, yAxis.Step), assets.BodyFont, 18,
+                TextMeshProUGUI t = ResultsUi.Text(plotArea, "YTick", ChartScale.Label(v, yAxis.Step), assets.BodyFont, 20,
                     ResultsTheme.Muted, TextAlignmentOptions.Right);
                 t.enableWordWrapping = false;
                 float f = (float)yAxis.Normalise(v);
@@ -124,12 +125,12 @@ namespace MTS.Results
                 t.rectTransform.pivot = new Vector2(1, 0.5f);
             }
 
-            TextMeshProUGUI xTitle = ResultsUi.Text(plotArea, "XTitle", spec.XLabel, assets.BodyFont, 20, ResultsTheme.Label, TextAlignmentOptions.Bottom);
+            TextMeshProUGUI xTitle = ResultsUi.Text(plotArea, "XTitle", spec.XLabel, assets.BodyFont, 21, ResultsTheme.Label, TextAlignmentOptions.Bottom);
             xTitle.enableWordWrapping = false;
             ResultsUi.Place(xTitle.rectTransform, new Vector2(0.5f, 0), new Vector2(0, -PadBottom + 4), new Vector2(600, 28));
             xTitle.rectTransform.pivot = new Vector2(0.5f, 0);
 
-            TextMeshProUGUI yTitle = ResultsUi.Text(plotArea, "YTitle", spec.YLabel, assets.BodyFont, 20, ResultsTheme.Label, TextAlignmentOptions.Center);
+            TextMeshProUGUI yTitle = ResultsUi.Text(plotArea, "YTitle", spec.YLabel, assets.BodyFont, 21, ResultsTheme.Label, TextAlignmentOptions.Center);
             yTitle.enableWordWrapping = false;
             ResultsUi.Place(yTitle.rectTransform, new Vector2(0, 0.5f), new Vector2(-PadLeft + 16, 0), new Vector2(400, 28));
             yTitle.rectTransform.pivot = new Vector2(0.5f, 0.5f);
@@ -138,7 +139,7 @@ namespace MTS.Results
             foreach (ChartMarker h in spec.HorizontalLines)
             {
                 // Label at the left end: on these charts the curve crosses reference lines on the right.
-                TextMeshProUGUI t = ResultsUi.Text(plotArea, "LineLabel", h.Label, assets.BodyFont, 17, ResultsTheme.Accent, TextAlignmentOptions.BottomLeft);
+                TextMeshProUGUI t = ResultsUi.Text(plotArea, "LineLabel", h.Label, assets.BodyFont, 20, ResultsTheme.Accent, TextAlignmentOptions.BottomLeft);
                 t.enableWordWrapping = false;
                 ResultsUi.Place(t.rectTransform, new Vector2(0, (float)yAxis.Normalise(h.Y)), new Vector2(8, 3), new Vector2(400, 24));
                 t.rectTransform.pivot = new Vector2(0, 0);
@@ -154,7 +155,7 @@ namespace MTS.Results
                 float fx = (float)xAxis.Normalise(p.X);
                 float fy = (float)yAxis.Normalise(p.Y);
                 bool right = fx < 0.6f;
-                TextMeshProUGUI t = ResultsUi.Text(plotArea, "PointLabel", p.Label, assets.BodyFont, 17, ResultsTheme.Text,
+                TextMeshProUGUI t = ResultsUi.Text(plotArea, "PointLabel", p.Label, assets.BodyFont, 20, ResultsTheme.Text,
                     right ? TextAlignmentOptions.Left : TextAlignmentOptions.Right);
                 t.enableWordWrapping = false;
                 // Below the point when there is room (curves here mostly come in from above), else above it.

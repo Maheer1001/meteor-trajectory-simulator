@@ -14,6 +14,10 @@ namespace MTS.Results
         public const double ChelyabinskKilotons = 500.0;
         /// <summary>Tunguska 1908: estimates range from 10 to 15 Mt; the midpoint is used for ratios.</summary>
         public const double TunguskaKilotons = 12500.0;
+        /// <summary>Meteor Crater (Barringer), Arizona: commonly quoted as about 10 Mt.</summary>
+        public const double MeteorCraterKilotons = 10000.0;
+        /// <summary>Chicxulub (66 Myr ago): about 1e8 Mt (estimates span 3e7 to 3e8 Mt).</summary>
+        public const double ChicxulubKilotons = 1e11;
 
         private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -84,7 +88,7 @@ namespace MTS.Results
         /// <summary>Energy in joules in scientific notation, e.g. "2.09 × 10^15 J".</summary>
         public static string Joules(double joules, bool rich = false) => Scientific(joules, 3, rich) + " J";
 
-        /// <summary>TNT equivalent with a sensible unit: kg, t, kt, Mt or Gt of TNT.</summary>
+        /// <summary>TNT equivalent with a sensible unit: kg, t, kt, Mt, Gt or Tt of TNT.</summary>
         public static string Tnt(double joules)
         {
             double kt = joules / PhysicalConstants.JoulesPerKilotonTnt;
@@ -93,6 +97,8 @@ namespace MTS.Results
                 return "0 t TNT";
             }
 
+            if (kt >= 1e12) return Scientific(kt / 1e9) + " Tt TNT";
+            if (kt >= 1e9) return Sig(kt / 1e9) + " Tt TNT";
             if (kt >= 1e6) return Sig(kt / 1e6) + " Gt TNT";
             if (kt >= 1e3) return Sig(kt / 1e3) + " Mt TNT";
             if (kt >= 1) return Sig(kt) + " kt TNT";
@@ -101,9 +107,10 @@ namespace MTS.Results
         }
 
         /// <summary>
-        /// Plain-language comparison with reference events: Hiroshima (15 kt), Chelyabinsk 2013 (about 500 kt) and
-        /// Tunguska 1908 (10-15 Mt). The largest reference not above the energy is used; below Hiroshima the result
-        /// is a fraction of Hiroshima.
+        /// Plain-language comparison with reference events: Hiroshima (15 kt), Chelyabinsk 2013 (about 500 kt),
+        /// Tunguska 1908 (10-15 Mt) and Chicxulub (about 1e8 Mt). The largest reference not above the energy is used;
+        /// from 1 Gt up the comparison is with Chicxulub (a fraction of it below its size), below Hiroshima it is a
+        /// fraction of Hiroshima.
         /// </summary>
         public static string Comparison(double joules)
         {
@@ -115,7 +122,12 @@ namespace MTS.Results
 
             string name;
             double reference;
-            if (kt >= TunguskaKilotons * 0.8)
+            if (kt >= 1e6)
+            {
+                name = "Chicxulub (dinosaur killer)";
+                reference = ChicxulubKilotons;
+            }
+            else if (kt >= TunguskaKilotons * 0.8)
             {
                 name = "Tunguska (1908)";
                 reference = TunguskaKilotons;
@@ -150,6 +162,28 @@ namespace MTS.Results
             return "1/" + Sig(1.0 / ratio, 2) + " of " + name;
         }
 
+        /// <summary>
+        /// A ground range that may be planet-sized: "everywhere on Earth" at the antipode limit, "12,000 km (global)"
+        /// beyond a quarter of the circumference, otherwise <see cref="Distance"/>.
+        /// </summary>
+        public static string Reach(double metres, bool annotate = true)
+        {
+            if (metres >= ImpactModel.MaxGroundRange * 0.999) return "Whole Earth";
+            if (annotate && metres >= ImpactEffects.GlobalRange) return Distance(metres) + " (global)";
+            return Distance(metres);
+        }
+
+        /// <summary>Compact duration for tables: "2 s", "45 s", "4 min", "1 h 24 min".</summary>
+        public static string ShortDuration(double seconds)
+        {
+            if (double.IsNaN(seconds) || double.IsInfinity(seconds)) return "-";
+            if (seconds < 10.0) return seconds.ToString("0.#", Inv) + " s";
+            if (seconds < 60.0) return Math.Round(seconds).ToString(Inv) + " s";
+            long minutes = (long)Math.Round(seconds / 60.0);
+            if (minutes < 60) return minutes.ToString(Inv) + " min";
+            return (minutes / 60).ToString(Inv) + " h " + (minutes % 60).ToString("00", Inv) + " min";
+        }
+
         /// <summary>Length: "350 m", "1.23 km", "12.3 km", "1,234 km".</summary>
         public static string Distance(double metres)
         {
@@ -159,6 +193,9 @@ namespace MTS.Results
             }
 
             double a = Math.Abs(metres);
+            if (a == 0) return "0 m";
+            if (a < 1e-3) return Sig(metres * 1e6, 2) + " µm";
+            if (a < 1e-2) return Sig(metres * 1e3, 2) + " mm";
             if (a < 1.0) return Sig(metres * 100.0, 2) + " cm";
             if (a < 1000.0) return Sig(metres, a < 10 ? 2 : 3) + " m";
             if (a < 100000.0) return Sig(metres / 1000.0, 3) + " km";

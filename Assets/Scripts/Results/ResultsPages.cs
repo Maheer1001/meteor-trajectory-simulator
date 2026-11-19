@@ -7,9 +7,128 @@ using UnityEngine.UI;
 
 namespace MTS.Results
 {
-    /// <summary>Fills the Summary, Charts and Physics pages of the results screen.</summary>
+    /// <summary>
+    /// Fills the Summary, Effects, Charts and Physics pages of the results screen. One type scale and grid for every
+    /// tab (at the 1920 x 1080 reference): pixel-font headings 30 px, body text 22 px, labels and table text 20-22 px,
+    /// 32 px card padding; headings and labels are left-aligned and values right-aligned on the card's right edge.
+    /// </summary>
     public static class ResultsPages
     {
+        /// <summary>Inner padding of every card.</summary>
+        public const float Pad = 32f;
+        /// <summary>Gap between cards.</summary>
+        public const float Gap = 24f;
+        public const float HeadingSize = 30f;
+        public const float BodySize = 22f;
+        public const float LabelSize = 20f;
+        /// <summary>Top of a card's heading, and the first line under it.</summary>
+        public const float HeadingTop = 24f;
+        public const float BelowHeading = 72f;
+
+        // ---------------------------------------------------------------- shared layout
+
+        private static float PreferredHeight(TextMeshProUGUI t, float width)
+        {
+            t.ForceMeshUpdate();
+            return t.GetPreferredValues(t.text, width, 0).y;
+        }
+
+        private static float PreferredWidth(TextMeshProUGUI t)
+        {
+            t.ForceMeshUpdate();
+            return t.GetPreferredValues(t.text, 10000, 0).x;
+        }
+
+        /// <summary>A section heading at the top-left of a card (pixel font, 30 px).</summary>
+        private static TextMeshProUGUI CardHeading(RectTransform card, string text, ResultsAssets a, Color? color = null)
+        {
+            TextMeshProUGUI h = ResultsUi.Heading(card, text, a, HeadingSize);
+            if (color.HasValue) h.color = color.Value;
+            ResultsUi.TopBand(h.rectTransform, HeadingTop, 36, Pad, Pad);
+            return h;
+        }
+
+        /// <summary>Wrapped body text across a card at the given top; returns its height.</summary>
+        private static float Paragraph(RectTransform card, string text, ResultsAssets a, float top, float size, Color color, float left = Pad, float right = Pad)
+        {
+            TextMeshProUGUI t = ResultsUi.Text(card, "Text", text, a.BodyFont, size, color);
+            ResultsUi.TopBand(t.rectTransform, top, 10, left, right);
+            Canvas.ForceUpdateCanvases();
+            float h = Mathf.Ceil(PreferredHeight(t, Mathf.Max(50f, t.rectTransform.rect.width))) + 2f;
+            ResultsUi.TopBand(t.rectTransform, top, h, left, right);
+            return h;
+        }
+
+        /// <summary>
+        /// One label / value row: label left (muted), value right-aligned on the card's right edge (bold), the value
+        /// wrapping if it does not fit beside the label, and an optional note line under the label. Returns the height.
+        /// </summary>
+        private static float KeyValue(RectTransform card, float top, string label, string value, string note, ResultsAssets a,
+            float left = Pad, float right = Pad, Color? valueColor = null, float labelSize = 21f)
+        {
+            Canvas.ForceUpdateCanvases();
+            float width = card.rect.width - left - right;
+            TextMeshProUGUI l = ResultsUi.Text(card, "Label", label, a.BodyFont, labelSize, ResultsTheme.Muted, TextAlignmentOptions.TopLeft);
+            l.enableWordWrapping = false;
+            float labelWidth = Mathf.Min(width * 0.62f, PreferredWidth(l) + 18f);
+            Place(l.rectTransform, left, top, labelWidth, 30);
+
+            TextMeshProUGUI v = ResultsUi.Text(card, "Value", value, a.BodyFont, BodySize, valueColor ?? ResultsTheme.Text, TextAlignmentOptions.TopRight, true);
+            float valueWidth = Mathf.Max(80f, width - labelWidth);
+            float vh = Mathf.Max(28f, PreferredHeight(v, valueWidth));
+            Place(v.rectTransform, left + width - valueWidth, top, valueWidth, vh + 2);
+            float h = Mathf.Max(30f, vh);
+            if (!string.IsNullOrEmpty(note))
+            {
+                // The note sits beside the label when it fits before the value, otherwise on its own line below.
+                TextMeshProUGUI n = ResultsUi.Text(card, "Note", note, a.BodyFont, LabelSize, ResultsTheme.Muted * new Color(1, 1, 1, 0.75f), TextAlignmentOptions.TopLeft);
+                n.enableWordWrapping = false;
+                float nw = PreferredWidth(n);
+                float valueUsed = Mathf.Min(valueWidth, PreferredWidth(v));
+                float inlineX = left + labelWidth - 8f;
+                if (vh <= 30f && inlineX + nw + 40f <= left + width - valueUsed)
+                {
+                    n.text = "·  " + n.text;
+                    Place(n.rectTransform, inlineX, top + 1, nw + 30, 30);
+                }
+                else
+                {
+                    n.enableWordWrapping = true;
+                    float nh = PreferredHeight(n, width);
+                    Place(n.rectTransform, left, top + h, width, nh + 2);
+                    h += nh;
+                }
+            }
+
+            return h;
+        }
+
+        /// <summary>Top-left placement inside a parent, in pixels from its top-left corner.</summary>
+        private static void Place(RectTransform rt, float x, float y, float width, float height)
+        {
+            rt.anchorMin = new Vector2(0, 1);
+            rt.anchorMax = new Vector2(0, 1);
+            rt.pivot = new Vector2(0, 1);
+            rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(width, height);
+        }
+
+        private static RectTransform CardAt(RectTransform parent, string name, ResultsAssets a, float x, float y, float width, float height)
+        {
+            RectTransform card = ResultsUi.Card(parent, name, a);
+            Place(card, x, y, width, height);
+            return card;
+        }
+
+        /// <summary>Short upper-case label (column header) in the label colour.</summary>
+        private static TextMeshProUGUI ColumnLabel(RectTransform parent, string text, ResultsAssets a, TextAlignmentOptions align = TextAlignmentOptions.TopLeft)
+        {
+            TextMeshProUGUI t = ResultsUi.Text(parent, "Column", text, a.BodyFont, LabelSize, ResultsTheme.Label, align, true);
+            t.characterSpacing = 2;
+            t.enableWordWrapping = false;
+            return t;
+        }
+
         // ---------------------------------------------------------------- Summary
 
         public static void BuildSummary(ResultsScreen screen, SimulationSession session)
@@ -20,26 +139,35 @@ namespace MTS.Results
             RectTransform right = screen.SummaryRight;
             ResultsUi.DestroyChildren(left);
             ResultsUi.DestroyChildren(right);
+            Canvas.ForceUpdateCanvases();
 
             // Left card: the headline event, energy comparison and key numbers.
             string heading = report.Kind == OutcomeKind.Disintegrated ? "WHAT HAPPENED"
                 : report.Kind == OutcomeKind.Airburst ? "ENERGY RELEASED IN THE AIR"
                 : report.Kind == OutcomeKind.Timeout || report.Kind == OutcomeKind.Error || report.Kind == OutcomeKind.NoRun ? "STATUS"
                 : "ENERGY RELEASED";
-            TextMeshProUGUI h = ResultsUi.Heading(left, heading, a, 28);
-            ResultsUi.TopBand(h.rectTransform, 26, 34, 34, 34);
+            CardHeading(left, heading, a);
+            if (report.ShowGlobalBanner)
+            {
+                GlobalPill(left, report, a);
+            }
 
-            TextMeshProUGUI big = ResultsUi.Text(left, "Headline", report.Headline, a.BodyFont, 76, ResultsTheme.Accent, TextAlignmentOptions.TopLeft, true);
-            ResultsUi.TopBand(big.rectTransform, 64, 92, 34, 34);
+            TextMeshProUGUI big = ResultsUi.Text(left, "Headline", report.Headline, a.BodyFont, 72, ResultsTheme.Accent, TextAlignmentOptions.TopLeft, true);
+            ResultsUi.TopBand(big.rectTransform, 68, 84, Pad, Pad);
             big.enableAutoSizing = true;
             big.fontSizeMin = 40;
-            big.fontSizeMax = 76;
+            big.fontSizeMax = 72;
             big.enableWordWrapping = false;
 
-            TextMeshProUGUI sub = ResultsUi.Text(left, "Subtitle", report.Subtitle, a.BodyFont, 23, ResultsTheme.Text);
-            ResultsUi.TopBand(sub.rectTransform, 160, 64, 34, 34);
+            float y = 156;
+            y += Paragraph(left, report.Subtitle, a, y, BodySize, ResultsTheme.Text) + 6;
+            string meteor = MeteorLine(report);
+            if (meteor.Length > 0)
+            {
+                y += Paragraph(left, meteor, a, y, LabelSize, ResultsTheme.Muted) + 6;
+            }
 
-            float y = 236;
+            y += 10;
             if (report.Energy > 0)
             {
                 y = EnergyBars(left, report, a, y);
@@ -59,7 +187,30 @@ namespace MTS.Results
             }
         }
 
-        /// <summary>Log-scale bars comparing the event with Hiroshima, Chelyabinsk and Tunguska.</summary>
+        /// <summary>"Inbound entry  ·  70% Iron (Fe-Ni) + 30% Stony (ordinary chondrite)".</summary>
+        private static string MeteorLine(OutcomeReport report)
+        {
+            string composition = report.CompositionText();
+            if (report.ModeText.Length == 0 && composition.Length == 0) return "";
+            return "<b><color=#FFFFFF>" + report.ModeText + "</color></b>" + (composition.Length > 0 ? "  ·  " + composition : "");
+        }
+
+        /// <summary>A red badge at the top right of a card naming the global scale ("MASS EXTINCTION").</summary>
+        private static void GlobalPill(RectTransform card, OutcomeReport report, ResultsAssets a)
+        {
+            bool severe = report.Effects.Global >= GlobalScale.GlobalClimate;
+            RectTransform pill = ResultsUi.PixelBox(card, "GlobalPill", a, severe ? ResultsTheme.Red : ResultsTheme.TabIdleFill,
+                severe ? ResultsTheme.DarkRed : ResultsTheme.PanelOutline, false, 4f);
+            TextMeshProUGUI t = ResultsUi.Text(pill, "Label", report.GlobalTitle, a.PixelFont, 24, Color.white, TextAlignmentOptions.Center);
+            t.enableWordWrapping = false;
+            float w = PreferredWidth(t) + 36f;
+            pill.anchorMin = pill.anchorMax = pill.pivot = new Vector2(1, 1);
+            pill.anchoredPosition = new Vector2(-Pad + 6, -HeadingTop + 6);
+            pill.sizeDelta = new Vector2(w, 46);
+            ResultsUi.Stretch(t.rectTransform, 12, 2, 12, 2);
+        }
+
+        /// <summary>Log-scale bars comparing the event with Hiroshima, Chelyabinsk, Tunguska, Meteor Crater and Chicxulub.</summary>
         private static float EnergyBars(RectTransform card, OutcomeReport report, ResultsAssets a, float top)
         {
             double kt = report.EnergyKilotons;
@@ -67,61 +218,56 @@ namespace MTS.Results
             {
                 ("This event", ResultsFormat.Tnt(report.Energy), kt, true),
                 ("Hiroshima bomb (1945)", "15 kt", ResultsFormat.HiroshimaKilotons, false),
-                ("Chelyabinsk meteor (2013)", "~500 kt", ResultsFormat.ChelyabinskKilotons, false),
-                ("Tunguska event (1908)", "10-15 Mt", ResultsFormat.TunguskaKilotons, false),
+                ("Chelyabinsk (2013)", "~500 kt", ResultsFormat.ChelyabinskKilotons, false),
+                ("Meteor Crater, Arizona", "~10 Mt", ResultsFormat.MeteorCraterKilotons, false),
+                ("Tunguska (1908)", "10-15 Mt", ResultsFormat.TunguskaKilotons, false),
+                ("Chicxulub (dinosaurs)", "~100 million Mt", ResultsFormat.ChicxulubKilotons, false),
             };
+            rows.Sort((x, y) => x.self ? -1 : y.self ? 1 : x.kt.CompareTo(y.kt));
 
             double lo = Math.Min(1e-3, kt / 3.0);
-            double hi = Math.Max(ResultsFormat.TunguskaKilotons, kt) * 2.0;
+            double hi = Math.Max(ResultsFormat.ChicxulubKilotons, kt) * 3.0;
             double span = Math.Log10(hi / lo);
 
-            TextMeshProUGUI caption = ResultsUi.Text(card, "BarsCaption", report.Comparison.Length > 0
-                    ? "<b><color=#FFFFFF>" + report.Comparison + "</color></b>   <size=18>TNT equivalent, log scale</size>"
-                    : "TNT equivalent, log scale",
-                a.BodyFont, 22, ResultsTheme.Muted);
-            ResultsUi.TopBand(caption.rectTransform, top, 30, 34, 34);
-            top += 38;
+            string caption = (report.Comparison.Length > 0 ? "<b><color=#FFFFFF>" + report.Comparison + "</color></b>   " : "") +
+                             "TNT equivalent, log scale  ·  " + ResultsFormat.Joules(report.Energy, true);
+            top += Paragraph(card, caption, a, top, LabelSize, ResultsTheme.Muted) + 8;
 
-            const float rowHeight = 40f;
-            const float labelWidth = 270f;
+            const float rowHeight = 32f;
+            const float labelWidth = 268f;
             foreach (var row in rows)
             {
-                TextMeshProUGUI name = ResultsUi.Text(card, "BarName", row.name, a.BodyFont, 20,
+                TextMeshProUGUI name = ResultsUi.Text(card, "BarName", row.name, a.BodyFont, LabelSize,
                     row.self ? ResultsTheme.Text : ResultsTheme.Muted, TextAlignmentOptions.Left, row.self);
                 name.enableWordWrapping = false;
-                RectTransform nr = name.rectTransform;
-                nr.anchorMin = new Vector2(0, 1);
-                nr.anchorMax = new Vector2(0, 1);
-                nr.pivot = new Vector2(0, 1);
-                nr.anchoredPosition = new Vector2(34, -top);
-                nr.sizeDelta = new Vector2(labelWidth, rowHeight - 8);
+                Place(name.rectTransform, Pad, top, labelWidth, rowHeight - 6);
 
                 RectTransform track = ResultsUi.Node("Track", card);
                 track.anchorMin = new Vector2(0, 1);
                 track.anchorMax = new Vector2(1, 1);
                 track.pivot = new Vector2(0, 1);
-                track.offsetMin = new Vector2(34 + labelWidth, -top - (rowHeight - 8));
-                track.offsetMax = new Vector2(-34, -top);
+                track.offsetMin = new Vector2(Pad + labelWidth, -top - (rowHeight - 6));
+                track.offsetMax = new Vector2(-Pad, -top);
 
-                float f = (float)Math.Max(0.04, Math.Min(1.0, Math.Log10(Math.Max(row.kt, lo) / lo) / span));
+                float f = (float)Math.Max(0.03, Math.Min(1.0, Math.Log10(Math.Max(row.kt, lo) / lo) / span));
                 Color c = row.self ? ResultsTheme.Red : new Color(0.55f, 0.5f, 0.62f, 1f);
-                RectTransform bar = ResultsUi.PixelBox(track, "Bar", a, c, row.self ? ResultsTheme.DarkRed : new Color(0.3f, 0.27f, 0.36f), false);
+                RectTransform bar = ResultsUi.PixelBox(track, "Bar", a, c, row.self ? ResultsTheme.DarkRed : new Color(0.3f, 0.27f, 0.36f), false, 6f, 20f);
                 bar.anchorMin = new Vector2(0, 0);
-                bar.anchorMax = new Vector2(f * 0.78f, 1);
+                bar.anchorMax = new Vector2(f * 0.7f, 1);
                 bar.offsetMin = Vector2.zero;
                 bar.offsetMax = Vector2.zero;
 
-                TextMeshProUGUI value = ResultsUi.Text(track, "Value", row.value, a.BodyFont, 20,
+                TextMeshProUGUI value = ResultsUi.Text(track, "Value", row.value, a.BodyFont, LabelSize,
                     row.self ? ResultsTheme.Accent : ResultsTheme.Muted, TextAlignmentOptions.Left, row.self);
                 value.enableWordWrapping = false;
-                value.rectTransform.anchorMin = new Vector2(f * 0.78f, 0);
+                value.rectTransform.anchorMin = new Vector2(f * 0.7f, 0);
                 value.rectTransform.anchorMax = new Vector2(1, 1);
-                value.rectTransform.offsetMin = new Vector2(12, 0);
+                value.rectTransform.offsetMin = new Vector2(10, 0);
                 value.rectTransform.offsetMax = Vector2.zero;
                 top += rowHeight;
             }
 
-            return top + 18;
+            return top + 16;
         }
 
         private static void StatGrid(RectTransform card, List<ReportStat> stats, ResultsAssets a, float top)
@@ -129,8 +275,8 @@ namespace MTS.Results
             RectTransform grid = ResultsUi.Node("Stats", card);
             grid.anchorMin = new Vector2(0, 0);
             grid.anchorMax = new Vector2(1, 1);
-            grid.offsetMin = new Vector2(26, 26);
-            grid.offsetMax = new Vector2(-26, -top);
+            grid.offsetMin = new Vector2(Pad, Pad - 8);
+            grid.offsetMax = new Vector2(-Pad, -top);
             Canvas.ForceUpdateCanvases();
             Vector2 size = grid.rect.size;
             int columns = 4;
@@ -145,88 +291,264 @@ namespace MTS.Results
                 RectTransform tile = ResultsUi.PixelBox(grid, "Stat", a, new Color(1f, 1f, 1f, 0.045f), new Color(1f, 1f, 1f, 0.12f), false);
                 ResultsUi.Place(tile, new Vector2(0, 1), new Vector2(col * (w + gap), -row * (hgt + gap)), new Vector2(w, hgt));
                 ReportStat s = stats[i];
-                TextMeshProUGUI label = ResultsUi.Text(tile, "Label", s.Label.ToUpperInvariant(), a.BodyFont, 16, ResultsTheme.Label, TextAlignmentOptions.TopLeft, true);
-                label.characterSpacing = 2;
-                ResultsUi.TopBand(label.rectTransform, 14, 24, 16, 12);
-                TextMeshProUGUI value = ResultsUi.Text(tile, "Value", s.Value, a.BodyFont, 34, ResultsTheme.Text, TextAlignmentOptions.TopLeft, true);
+                TextMeshProUGUI label = ResultsUi.Text(tile, "Label", s.Label.ToUpperInvariant(), a.BodyFont, LabelSize, ResultsTheme.Label, TextAlignmentOptions.TopLeft, true);
+                label.enableWordWrapping = false;
+                ResultsUi.TopBand(label.rectTransform, 12, 26, 16, 12);
+                TextMeshProUGUI value = ResultsUi.Text(tile, "Value", s.Value, a.BodyFont, 30, ResultsTheme.Text, TextAlignmentOptions.TopLeft, true);
                 value.enableAutoSizing = true;
-                value.fontSizeMin = 20;
-                value.fontSizeMax = 34;
+                value.fontSizeMin = 22;
+                value.fontSizeMax = 30;
                 value.enableWordWrapping = false;
-                ResultsUi.TopBand(value.rectTransform, 40, 44, 16, 12);
+                ResultsUi.TopBand(value.rectTransform, 40, 38, 16, 12);
                 if (s.Note.Length > 0)
                 {
-                    TextMeshProUGUI note = ResultsUi.Text(tile, "Note", s.Note, a.BodyFont, 17, ResultsTheme.Muted);
-                    ResultsUi.TopBand(note.rectTransform, 86, Math.Max(24, hgt - 94), 16, 12);
+                    TextMeshProUGUI note = ResultsUi.Text(tile, "Note", s.Note, a.BodyFont, LabelSize, ResultsTheme.Muted);
+                    note.lineSpacing = -8;
+                    ResultsUi.TopBand(note.rectTransform, 80, Math.Max(24, hgt - 86), 16, 12);
                 }
             }
         }
 
         private static void RingTable(RectTransform card, OutcomeReport report, ResultsAssets a)
         {
-            TextMeshProUGUI h = ResultsUi.Heading(card, "BLAST ON THE GROUND", a, 28);
-            ResultsUi.TopBand(h.rectTransform, 26, 34, 34, 34);
-            TextMeshProUGUI note = ResultsUi.Text(card, "Effects", report.GroundEffects, a.BodyFont, 21, ResultsTheme.Text);
-            ResultsUi.TopBand(note.rectTransform, 66, 56, 34, 34);
+            CardHeading(card, "BLAST ON THE GROUND", a);
+            float top = BelowHeading;
+            top += Paragraph(card, report.GroundEffects, a, top, BodySize, ResultsTheme.Text) + 14;
 
-            float top = 128;
-            TextMeshProUGUI c1 = ResultsUi.Text(card, "ColPressure", "PEAK OVERPRESSURE", a.BodyFont, 15, ResultsTheme.Label, TextAlignmentOptions.Left, true);
-            c1.characterSpacing = 2;
-            ResultsUi.TopBand(c1.rectTransform, top, 22, 78, 34);
-            TextMeshProUGUI c2 = ResultsUi.Text(card, "ColRange", "REACHES OUT TO", a.BodyFont, 15, ResultsTheme.Label, TextAlignmentOptions.Right, true);
-            c2.characterSpacing = 2;
-            ResultsUi.TopBand(c2.rectTransform, top, 22, 34, 34);
-            top += 30;
+            TextMeshProUGUI c1 = ColumnLabel(card, "PEAK OVERPRESSURE", a);
+            ResultsUi.TopBand(c1.rectTransform, top, 26, Pad + 44, Pad);
+            TextMeshProUGUI c2 = ColumnLabel(card, "REACHES OUT TO", a, TextAlignmentOptions.TopRight);
+            ResultsUi.TopBand(c2.rectTransform, top, 26, Pad, Pad);
+            top += 32;
 
             Canvas.ForceUpdateCanvases();
-            float available = card.rect.height - top - 24;
+            float available = card.rect.height - top - 20;
             int count = Math.Max(1, report.Rings.Count);
-            float rowHeight = Mathf.Clamp(available / count, 44f, 68f);
+            float rowHeight = Mathf.Clamp(available / count, 52f, 70f);
             for (int i = 0; i < report.Rings.Count; i++)
             {
                 RingRow r = report.Rings[i];
-                float alpha = r.Reached ? 1f : 0.38f;
+                float alpha = r.Reached ? 1f : 0.4f;
                 if (i % 2 == 0)
                 {
                     Image stripe = ResultsUi.Image(card, "Stripe", null, new Color(1, 1, 1, 0.035f), false);
-                    ResultsUi.TopBand(stripe.rectTransform, top, rowHeight, 22, 22);
+                    ResultsUi.TopBand(stripe.rectTransform, top, rowHeight, Pad - 12, Pad - 12);
                 }
 
                 Color col = ResultsTheme.Rings[r.Index % ResultsTheme.Rings.Length];
                 RectTransform sw = ResultsUi.PixelBox(card, "Swatch", a, col * new Color(1, 1, 1, 0.6f * alpha), col * new Color(1, 1, 1, alpha), false, 6f, ResultsUi.SmallBoxPixelScale);
-                ResultsUi.Place(sw, new Vector2(0, 1), new Vector2(34, -top - (rowHeight - 28) / 2), new Vector2(28, 28));
+                ResultsUi.Place(sw, new Vector2(0, 1), new Vector2(Pad, -top - (rowHeight - 26) / 2), new Vector2(26, 26));
 
-                TextMeshProUGUI label = ResultsUi.Text(card, "Pressure", "<b>" + ResultsFormat.Psi(r.Overpressure) + "</b>  <size=17><color=#B8B8CC>" +
-                    ResultsFormat.Pressure(r.Overpressure) + "</color></size>", a.BodyFont, 21, new Color(1, 1, 1, alpha), TextAlignmentOptions.TopLeft);
+                float textTop = top + (rowHeight - 50) / 2;
+                TextMeshProUGUI label = ResultsUi.Text(card, "Pressure", "<b>" + ResultsFormat.Psi(r.Overpressure) + "</b>  <color=#B8B8CC>" +
+                    ResultsFormat.Pressure(r.Overpressure) + "</color>", a.BodyFont, BodySize, new Color(1, 1, 1, alpha), TextAlignmentOptions.TopLeft);
                 label.enableWordWrapping = false;
-                ResultsUi.TopBand(label.rectTransform, top + 5, 26, 78, 200);
-                TextMeshProUGUI effect = ResultsUi.Text(card, "Effect", r.Effect, a.BodyFont, 17, ResultsTheme.Muted * new Color(1, 1, 1, alpha), TextAlignmentOptions.TopLeft);
+                ResultsUi.TopBand(label.rectTransform, textTop - 2, 28, Pad + 44, 220);
+                TextMeshProUGUI effect = ResultsUi.Text(card, "Effect", r.Effect, a.BodyFont, LabelSize, ResultsTheme.Muted * new Color(1, 1, 1, alpha), TextAlignmentOptions.TopLeft);
                 effect.enableWordWrapping = false;
-                ResultsUi.TopBand(effect.rectTransform, top + 31, 24, 78, 190);
+                ResultsUi.TopBand(effect.rectTransform, textTop + 26, 26, Pad + 44, 210);
 
-                TextMeshProUGUI range = ResultsUi.Text(card, "Range", r.Reached ? ResultsFormat.Distance(r.Radius) : "not reached", a.BodyFont,
-                    r.Reached ? 26 : 18, r.Reached ? ResultsTheme.Accent : ResultsTheme.Muted * new Color(1, 1, 1, 0.7f), TextAlignmentOptions.Right, r.Reached);
+                TextMeshProUGUI range = ResultsUi.Text(card, "Range", r.Reached ? ResultsFormat.Reach(r.Radius) : "not reached", a.BodyFont,
+                    r.Reached ? 24 : LabelSize, r.Reached ? ResultsTheme.Accent : ResultsTheme.Muted * new Color(1, 1, 1, 0.7f), TextAlignmentOptions.Right, r.Reached);
                 range.enableWordWrapping = false;
-                ResultsUi.TopBand(range.rectTransform, top, rowHeight, 34, 34);
+                ResultsUi.TopBand(range.rectTransform, top, rowHeight, Pad, Pad);
                 top += rowHeight;
             }
         }
 
         private static void NoGroundEffects(RectTransform card, OutcomeReport report, SimulationSession session, ResultsAssets a)
         {
-            TextMeshProUGUI h = ResultsUi.Heading(card, "ON THE GROUND", a, 28);
-            ResultsUi.TopBand(h.rectTransform, 26, 34, 34, 34);
-            TextMeshProUGUI note = ResultsUi.Text(card, "Effects", report.GroundEffects, a.BodyFont, 23, ResultsTheme.Text);
-            ResultsUi.TopBand(note.rectTransform, 68, 64, 34, 34);
+            CardHeading(card, "ON THE GROUND", a);
+            float top = BelowHeading;
+            top += Paragraph(card, report.GroundEffects, a, top, BodySize, ResultsTheme.Text) + 12;
 
             RectTransform chartRoot = ResultsUi.Node("Chart", card);
-            ResultsUi.Stretch(chartRoot, 8, 12, 12, 140);
+            ResultsUi.Stretch(chartRoot, 8, 12, 12, top);
             ChartSpec spec = report.Kind == OutcomeKind.Disintegrated
                 ? MassAltitudeChart(session.Result, "How it burned up")
                 : AltitudeTimeChart(session.Result, "Altitude");
             if (spec != null)
             {
                 chartRoot.gameObject.AddComponent<ChartView>().Plot(spec, a);
+            }
+        }
+
+        // ---------------------------------------------------------------- Effects
+
+        public static void BuildEffects(ResultsScreen screen)
+        {
+            RectTransform root = screen.EffectsRoot;
+            if (root == null) return;
+            OutcomeReport report = screen.Report;
+            ResultsAssets a = screen.Assets;
+            ResultsUi.DestroyChildren(root);
+            Canvas.ForceUpdateCanvases();
+            float width = root.rect.width;
+            float height = root.rect.height;
+            float y = 0;
+
+            if (report.ShowGlobalBanner)
+            {
+                y += GlobalBanner(root, report, a, width) + Gap;
+            }
+
+            bool table = report.DistanceRows.Count > 0;
+            bool blast = !table && report.Kind == OutcomeKind.Airburst;
+            float cardHeight = table ? Mathf.Min(380f, height - y - 300f - Gap) : blast ? 210f : height - y;
+            int n = report.EffectCards.Count;
+            float cardWidth = (width - Gap * (n - 1)) / Math.Max(1, n);
+            for (int i = 0; i < n; i++)
+            {
+                RectTransform card = CardAt(root, "EffectCard", a, i * (cardWidth + Gap), y, cardWidth, cardHeight);
+                EffectCardContent(card, report.EffectCards[i], a);
+            }
+
+            y += cardHeight + Gap;
+            if (table)
+            {
+                RectTransform card = CardAt(root, "DistanceCard", a, 0, y, width, height - y);
+                DistanceTable(card, report, a);
+            }
+            else if (blast)
+            {
+                RectTransform card = CardAt(root, "BlastCard", a, 0, y, width, height - y);
+                AirburstBlast(card, report, a);
+            }
+        }
+
+        /// <summary>For an airburst the blast wave is the whole story on the ground: its reach, in plain words.</summary>
+        private static void AirburstBlast(RectTransform card, OutcomeReport report, ResultsAssets a)
+        {
+            CardHeading(card, "WHAT REACHED THE GROUND: THE BLAST WAVE", a);
+            float y = BelowHeading;
+            y += Paragraph(card, report.GroundEffects + " Peak overpressure right under the burst: " +
+                                 ResultsFormat.Pressure(report.GroundZeroOverpressure) + " (" + ResultsFormat.Psi(report.GroundZeroOverpressure) + ").",
+                a, y, BodySize, ResultsTheme.Text) + 14;
+            // Two columns: the burst on the left, how far its blast reaches on the right.
+            Canvas.ForceUpdateCanvases();
+            float half = (card.rect.width - 2 * Pad - Gap * 2) / 2f;
+            float yl = y, yr = y;
+            TextMeshProUGUI lh = ColumnLabel(card, "THE BURST", a);
+            Place(lh.rectTransform, Pad, yl, half, 26);
+            TextMeshProUGUI rh = ColumnLabel(card, "BLAST REACH ON THE GROUND", a);
+            Place(rh.rectTransform, Pad + half + Gap * 2, yr, half, 26);
+            yl += 36;
+            yr += 36;
+            for (int i = 0; i < report.Stats.Count && i < 6; i++)
+            {
+                ReportStat st = report.Stats[i];
+                yl += KeyValue(card, yl, st.Label, st.Value, st.Note, a, Pad, card.rect.width - Pad - half) + 8;
+            }
+
+            bool any = false;
+            foreach (RingRow r in report.Rings)
+            {
+                if (!r.Reached) continue;
+                any = true;
+                yr += KeyValue(card, yr, r.Effect, ResultsFormat.Reach(r.Radius), ResultsFormat.Psi(r.Overpressure), a,
+                    Pad + half + Gap * 2, Pad, ResultsTheme.Accent) + 8;
+            }
+
+            if (!any)
+            {
+                Paragraph(card, "No damaging overpressure anywhere on the ground.", a, yr, BodySize, ResultsTheme.Muted, Pad + half + Gap * 2, Pad);
+            }
+        }
+
+        private static float GlobalBanner(RectTransform root, OutcomeReport report, ResultsAssets a, float width)
+        {
+            bool severe = report.Effects.Global >= GlobalScale.GlobalClimate;
+            const float height = 112f;
+            RectTransform banner = ResultsUi.PixelBox(root, "GlobalBanner", a,
+                severe ? new Color(0.45f, 0.02f, 0.03f, 0.95f) : ResultsTheme.PanelFill, severe ? ResultsTheme.Red : ResultsTheme.PanelOutline, true, 5f);
+            Place(banner, 0, 0, width, height);
+            TextMeshProUGUI title = ResultsUi.Text(banner, "Title", report.GlobalTitle, a.PixelFont, 40, severe ? Color.white : ResultsTheme.Label, TextAlignmentOptions.Left);
+            title.enableWordWrapping = false;
+            float tw = Mathf.Min(560f, PreferredWidth(title) + 12f);
+            Place(title.rectTransform, Pad, 0, tw, height);
+            title.rectTransform.anchorMin = new Vector2(0, 0);
+            title.rectTransform.anchorMax = new Vector2(0, 1);
+            title.rectTransform.offsetMin = new Vector2(Pad, 0);
+            title.rectTransform.offsetMax = new Vector2(Pad + tw, 0);
+
+            string text = report.GlobalText + "  <color=#B8B8CC>(" + ResultsFormat.Tnt(report.Energy) + ")</color>";
+            TextMeshProUGUI body = ResultsUi.Text(banner, "Text", text, a.BodyFont, BodySize, Color.white, TextAlignmentOptions.Left);
+            ResultsUi.Stretch(body.rectTransform, Pad + tw + 24, 8, Pad, 8);
+            return height;
+        }
+
+        private static void EffectCardContent(RectTransform card, EffectCard e, ResultsAssets a)
+        {
+            Color accent = ResultsTheme.GroupColor(e.Group);
+            Image stripe = ResultsUi.Image(card, "Accent", null, e.Applies ? accent : accent * new Color(1, 1, 1, 0.35f), false);
+            Place(stripe.rectTransform, Pad, HeadingTop + 42, 56, 4);
+            CardHeading(card, e.Title, a, e.Applies ? accent : ResultsTheme.Muted);
+            float y = BelowHeading + 10;
+            y += Paragraph(card, e.Summary, a, y, BodySize, e.Applies ? ResultsTheme.Text : ResultsTheme.Muted) + 14;
+            foreach (ReportStat row in e.Rows)
+            {
+                y += KeyValue(card, y, row.Label, row.Value, row.Note, a, Pad, Pad, ResultsTheme.Accent, LabelSize) + 8;
+            }
+        }
+
+        private static void DistanceTable(RectTransform card, OutcomeReport report, ResultsAssets a)
+        {
+            CardHeading(card, "AT A DISTANCE FROM THE IMPACT", a);
+            Canvas.ForceUpdateCanvases();
+            float width = card.rect.width - 2 * Pad;
+            bool ocean = report.Effects.HasTsunami;
+            // Column layout (fractions of the inner width): distance, shaking, heat, debris, wave (ocean), arrival.
+            var cols = new List<(string title, float w)>
+            {
+                ("DISTANCE", 0.09f),
+                ("SHAKING (MERCALLI)", ocean ? 0.22f : 0.25f),
+                ("HEAT", 0.15f),
+                ("DEBRIS", ocean ? 0.18f : 0.21f),
+            };
+            if (ocean) cols.Add(("WAVE", 0.09f));
+            cols.Add(("ARRIVES AFTER", ocean ? 0.27f : 0.30f));
+
+            float top = BelowHeading - 4;
+            float x = Pad;
+            foreach (var c in cols)
+            {
+                TextMeshProUGUI h = ColumnLabel(card, c.title, a);
+                Place(h.rectTransform, x, top, c.w * width - 12, 26);
+                x += c.w * width;
+            }
+
+            top += 32;
+            float available = card.rect.height - top - 16;
+            float rowHeight = Mathf.Clamp(available / Math.Max(1, report.DistanceRows.Count), 34f, 46f);
+            for (int i = 0; i < report.DistanceRows.Count; i++)
+            {
+                DistanceRow r = report.DistanceRows[i];
+                if (i % 2 == 0)
+                {
+                    Image stripe = ResultsUi.Image(card, "Stripe", null, new Color(1, 1, 1, 0.035f), false);
+                    ResultsUi.TopBand(stripe.rectTransform, top, rowHeight, Pad - 12, Pad - 12);
+                }
+
+                var cells = new List<string>
+                {
+                    "<b>" + ResultsFormat.Distance(r.Distance) + "</b>",
+                    r.Intensity == "-" ? r.Shaking : "<b><color=#FFCC47>" + r.Intensity + "</color></b>  " + r.Shaking,
+                    r.Heat,
+                    r.Debris,
+                };
+                if (ocean) cells.Add(r.Wave);
+                cells.Add(r.Arrival);
+                x = Pad;
+                for (int c = 0; c < cols.Count; c++)
+                {
+                    TextMeshProUGUI t = ResultsUi.Text(card, "Cell", cells[c], a.BodyFont, c == 0 ? BodySize : LabelSize,
+                        c == 0 ? ResultsTheme.Text : new Color(0.9f, 0.9f, 0.95f), TextAlignmentOptions.Left);
+                    t.enableWordWrapping = false;
+                    Place(t.rectTransform, x, top, cols[c].w * width - 12, rowHeight);
+                    x += cols[c].w * width;
+                }
+
+                top += rowHeight;
             }
         }
 
@@ -353,14 +675,14 @@ namespace MTS.Results
             if (s == null) return null;
             double maxMass = 0;
             foreach (double m in s.Mass) maxMass = Math.Max(maxMass, m);
-            bool tonnes = maxMass >= 10000;
+            MassUnit(maxMass, out double unit, out string unitLabel);
             var spec = new ChartSpec
             {
                 Title = title,
                 Subtitle = "ablation strips mass from the hot surface",
-                XLabel = tonnes ? "Mass (t)" : "Mass (kg)",
+                XLabel = "Mass (" + unitLabel + ")",
                 YLabel = "Altitude (km)",
-                X = Map(s.Mass, m => tonnes ? m / 1000.0 : m),
+                X = Map(s.Mass, m => m / unit),
                 Y = Map(s.Altitude, h => Math.Max(0.0, h) / 1000.0),
                 Color = ResultsTheme.Series[2],
                 XIncludeZero = true,
@@ -370,6 +692,30 @@ namespace MTS.Results
             int last = s.Count - 1;
             spec.Points.Add(new ChartMarker(spec.X[last], spec.Y[last], ResultsFormat.Mass(s.Mass[last]) + " left"));
             return spec;
+        }
+
+        /// <summary>
+        /// Axis unit for masses from grams to planet-killers: kg below 10 t, tonnes up to 100,000 t, then a power of ten
+        /// of tonnes ("10<sup>9</sup> t") so tick labels stay short.
+        /// </summary>
+        public static void MassUnit(double maxMass, out double unit, out string label)
+        {
+            if (maxMass < 1e4)
+            {
+                unit = 1.0;
+                label = "kg";
+            }
+            else if (maxMass < 1e8)
+            {
+                unit = 1e3;
+                label = "t";
+            }
+            else
+            {
+                int exponent = (int)Math.Floor(Math.Log10(maxMass / 1e3));
+                unit = 1e3 * Math.Pow(10, exponent);
+                label = "10<sup>" + exponent + "</sup> t";
+            }
         }
 
         public static ChartSpec TemperatureTimeChart(SimulationResult result)
@@ -401,74 +747,53 @@ namespace MTS.Results
 
         // ---------------------------------------------------------------- Physics details
 
+        /// <summary>Section cards packed top to bottom into as many columns as needed (three at 16:9).</summary>
         public static void BuildPhysics(ResultsScreen screen)
         {
             OutcomeReport report = screen.Report;
-            ResultsUi.DestroyChildren(screen.PhysicsLeft);
-            ResultsUi.DestroyChildren(screen.PhysicsRight);
+            RectTransform root = screen.PhysicsRoot;
+            ResultsUi.DestroyChildren(root);
+            Canvas.ForceUpdateCanvases();
             if (report.Details.Count == 0)
             {
-                TextMeshProUGUI t = ResultsUi.Text(screen.PhysicsLeft, "Empty", "No finished run.", screen.Assets.BodyFont, 24, ResultsTheme.Muted, TextAlignmentOptions.Center);
+                TextMeshProUGUI t = ResultsUi.Text(root, "Empty", "No finished run.", screen.Assets.BodyFont, 24, ResultsTheme.Muted, TextAlignmentOptions.Center);
                 ResultsUi.Stretch(t.rectTransform);
                 return;
             }
 
-            int half = (report.Details.Count + 1) / 2;
-            float top = 0;
-            for (int i = 0; i < report.Details.Count; i++)
+            const int columns = 3;
+            float width = root.rect.width;
+            float height = root.rect.height;
+            float columnWidth = (width - Gap * (columns - 1)) / columns;
+            // Each section goes to the column whose content ends highest (a simple masonry layout), in report order.
+            var tops = new float[columns];
+            foreach (ReportSection section in report.Details)
             {
-                if (i == half) top = 0;
-                RectTransform column = i < half ? screen.PhysicsLeft : screen.PhysicsRight;
-                top = Section(column, report.Details[i], screen.Assets, top) + 22;
+                int column = 0;
+                for (int c = 1; c < columns; c++)
+                {
+                    if (tops[c] < tops[column] - 0.5f) column = c;
+                }
+
+                RectTransform card = CardAt(root, "Section", screen.Assets, column * (columnWidth + Gap), tops[column], columnWidth, 100);
+                float h = Section(card, section, screen.Assets);
+                card.sizeDelta = new Vector2(columnWidth, h);
+                tops[column] += h + Gap;
             }
         }
 
-        private static float Section(RectTransform column, ReportSection section, ResultsAssets a, float top)
+        /// <summary>Fills a section card (heading, then label/value rows) and returns the card height it needs.</summary>
+        private static float Section(RectTransform card, ReportSection section, ResultsAssets a)
         {
-            const float rowHeight = 40f;
-            float height = 70 + section.Rows.Count * rowHeight + 14;
-            RectTransform card = ResultsUi.Card(column, "Section", a);
-            ResultsUi.TopBand(card, top, height);
-            TextMeshProUGUI h = ResultsUi.Heading(card, section.Title.ToUpperInvariant(), a, 26);
-            ResultsUi.TopBand(h.rectTransform, 20, 32, 30, 30);
-            float y = 66;
+            CardHeading(card, section.Title.ToUpperInvariant(), a);
+            float y = BelowHeading - 6;
             for (int i = 0; i < section.Rows.Count; i++)
             {
                 ReportStat row = section.Rows[i];
-                if (i % 2 == 0)
-                {
-                    Image stripe = ResultsUi.Image(card, "Stripe", null, new Color(1, 1, 1, 0.035f), false);
-                    ResultsUi.TopBand(stripe.rectTransform, y, rowHeight, 16, 16);
-                }
-
-                TextMeshProUGUI l = ResultsUi.Text(card, "Label", row.Label, a.BodyFont, 20, ResultsTheme.Muted, TextAlignmentOptions.Left);
-                l.enableWordWrapping = false;
-                l.rectTransform.anchorMin = new Vector2(0, 1);
-                l.rectTransform.anchorMax = new Vector2(0.36f, 1);
-                l.rectTransform.offsetMin = new Vector2(30, -y - rowHeight);
-                l.rectTransform.offsetMax = new Vector2(0, -y);
-
-                TextMeshProUGUI v = ResultsUi.Text(card, "Value", row.Value, a.BodyFont, 21, ResultsTheme.Text, TextAlignmentOptions.Left, true);
-                v.enableWordWrapping = false;
-                v.rectTransform.anchorMin = new Vector2(0.36f, 1);
-                v.rectTransform.anchorMax = new Vector2(row.Note.Length > 0 ? 0.62f : 1f, 1);
-                v.rectTransform.offsetMin = new Vector2(8, -y - rowHeight);
-                v.rectTransform.offsetMax = new Vector2(-8, -y);
-
-                if (row.Note.Length > 0)
-                {
-                    TextMeshProUGUI n = ResultsUi.Text(card, "Note", row.Note, a.BodyFont, 17, ResultsTheme.Muted * new Color(1, 1, 1, 0.85f), TextAlignmentOptions.Right);
-                    n.enableWordWrapping = false;
-                    n.rectTransform.anchorMin = new Vector2(0.62f, 1);
-                    n.rectTransform.anchorMax = new Vector2(1, 1);
-                    n.rectTransform.offsetMin = new Vector2(0, -y - rowHeight);
-                    n.rectTransform.offsetMax = new Vector2(-30, -y);
-                }
-
-                y += rowHeight;
+                y += KeyValue(card, y, row.Label, row.Value, row.Note, a) + 8;
             }
 
-            return top + height;
+            return y + Pad - 14;
         }
     }
 }
