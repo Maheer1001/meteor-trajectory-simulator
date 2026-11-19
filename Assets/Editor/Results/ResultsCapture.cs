@@ -102,7 +102,7 @@ namespace MTS.Results.Editor
             Canvas.ForceUpdateCanvases();
 
             screen.Populate();
-            screen.SetPlaceName(GeocodeApiKey.Load() == null ? ResultsGeocoder.NoKeyMessage : "(place lookup runs in play mode)");
+            screen.SetPlaceName(GeocodeApiKey.Load() == null ? "" : "(place lookup runs in play mode)");
 
             var tabs = allTabs
                 ? new[] { ResultsScreen.Tab.Summary, ResultsScreen.Tab.Map, ResultsScreen.Tab.Charts, ResultsScreen.Tab.Physics }

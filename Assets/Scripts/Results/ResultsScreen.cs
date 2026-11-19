@@ -154,9 +154,9 @@ namespace MTS.Results
                     : (coords.Length > 0 ? coords : placeName);
             }
 
-            if (MapView != null && placeName.Length > 0)
+            if (MapView != null)
             {
-                MapView.SetPlaceName(placeName);
+                MapView.SetPlaceName(placeName.Length > 0 ? placeName : "Ground zero");
             }
         }
 

@@ -62,8 +62,6 @@ namespace MTS.Results
             public string error;
         }
 
-        public const string NoKeyMessage = "Place name needs a geocoding API key";
-
         /// <summary>
         /// Looks up a place name and reports it through <paramref name="onName"/> (country first). Points in the sea get
         /// an approximate ocean name. <paramref name="onRequest"/> receives the live request (null when finished) so the
@@ -76,7 +74,7 @@ namespace MTS.Results
             {
                 Debug.LogWarning("No geocode.maps.co API key found. Set " + GeocodeApiKey.EnvironmentVariable +
                                  " or create Assets/StreamingAssets/secrets.json (see the README).");
-                onName?.Invoke(NoKeyMessage);
+                onName?.Invoke(""); // coordinates only; the log explains how to add a key
                 yield break;
             }
 
