@@ -126,13 +126,13 @@ namespace MTS.Results.Editor
 
         private static void BuildTabs(RectTransform root, ResultsScreen screen, ResultsAssets a)
         {
-            string[] names = { "SUMMARY", "MAP", "CHARTS", "PHYSICS" };
+            string[] names = { "SUMMARY", "MAP", "EFFECTS", "CHARTS", "PHYSICS" };
             screen.TabButtons = new Button[names.Length];
             for (int i = 0; i < names.Length; i++)
             {
                 Button tab = ResultsUi.PixelButton(root, "Tab" + names[i], names[i], a, 30);
                 ResultsUi.Place((RectTransform)tab.transform, new Vector2(0, 1), new Vector2(40 + i * 278, -156), new Vector2(260, 66));
-                TextMeshProUGUI hint = ResultsUi.Text(tab.transform, "Key", (i + 1).ToString(), a.BodyFont, 15, new Color(1, 1, 1, 0.45f), TextAlignmentOptions.TopRight);
+                TextMeshProUGUI hint = ResultsUi.Text(tab.transform, "Key", (i + 1).ToString(), a.BodyFont, 20, new Color(1, 1, 1, 0.5f), TextAlignmentOptions.TopRight);
                 ResultsUi.Stretch(hint.rectTransform, 10, 6, 14, 8);
                 screen.TabButtons[i] = tab;
             }
@@ -141,7 +141,7 @@ namespace MTS.Results.Editor
         private static void BuildPages(RectTransform root, ResultsScreen screen, ResultsAssets a)
         {
             RectTransform pages = ResultsUi.Stretch(ResultsUi.Node("Pages", root), 40, 40, 40, 246);
-            screen.Pages = new GameObject[4];
+            screen.Pages = new GameObject[ResultsScreen.TabCount];
 
             // Summary
             RectTransform summary = ResultsUi.Stretch(ResultsUi.Node("SummaryPage", pages));
@@ -167,6 +167,11 @@ namespace MTS.Results.Editor
             screen.MapView = mapRoot.gameObject.AddComponent<WorldMapView>();
             screen.Pages[1] = mapPage.gameObject;
 
+            // Effects: filled at run time (global banner, effect cards and the distance table)
+            RectTransform effects = ResultsUi.Stretch(ResultsUi.Node("EffectsPage", pages));
+            screen.EffectsRoot = effects;
+            screen.Pages[2] = effects.gameObject;
+
             // Charts: 2 x 2
             RectTransform charts = ResultsUi.Stretch(ResultsUi.Node("ChartsPage", pages));
             screen.ChartSlots = new RectTransform[4];
@@ -182,25 +187,14 @@ namespace MTS.Results.Editor
                 screen.ChartSlots[i] = ResultsUi.Stretch(ResultsUi.Node("Content", card));
             }
 
-            screen.Pages[2] = charts.gameObject;
+            screen.Pages[3] = charts.gameObject;
 
-            // Physics details: two columns of section cards
+            // Physics details: section cards packed into columns at run time
             RectTransform physics = ResultsUi.Stretch(ResultsUi.Node("PhysicsPage", pages));
-            RectTransform pl = ResultsUi.Node("LeftColumn", physics);
-            pl.anchorMin = new Vector2(0, 0);
-            pl.anchorMax = new Vector2(0.5f, 1);
-            pl.offsetMin = Vector2.zero;
-            pl.offsetMax = new Vector2(-12, 0);
-            RectTransform pr = ResultsUi.Node("RightColumn", physics);
-            pr.anchorMin = new Vector2(0.5f, 0);
-            pr.anchorMax = new Vector2(1, 1);
-            pr.offsetMin = new Vector2(12, 0);
-            pr.offsetMax = Vector2.zero;
-            screen.PhysicsLeft = pl;
-            screen.PhysicsRight = pr;
-            screen.Pages[3] = physics.gameObject;
+            screen.PhysicsRoot = physics;
+            screen.Pages[4] = physics.gameObject;
 
-            for (int i = 1; i < 4; i++)
+            for (int i = 1; i < ResultsScreen.TabCount; i++)
             {
                 screen.Pages[i].SetActive(false);
             }

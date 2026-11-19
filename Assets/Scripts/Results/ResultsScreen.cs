@@ -10,7 +10,7 @@ namespace MTS.Results
     /// <summary>
     /// Results screen controller (EarthCollision scene). The static layout is built by the editor tool
     /// MTS.Results.Editor.ResultsSceneBuilder; this component fills it from <see cref="SimulationSession"/>:
-    /// header, tabs (Summary, Map, Charts, Physics) and their content.
+    /// header, tabs (Summary, Map, Effects, Charts, Physics) and their content.
     /// </summary>
     public sealed class ResultsScreen : MonoBehaviour
     {
@@ -18,6 +18,7 @@ namespace MTS.Results
         {
             Summary,
             Map,
+            Effects,
             Charts,
             Physics,
         }
@@ -26,14 +27,15 @@ namespace MTS.Results
         public TextMeshProUGUI TitleText;
         public TextMeshProUGUI HeadlineText;
         public TextMeshProUGUI LocationText;
-        public Button[] TabButtons = new Button[4];
-        public GameObject[] Pages = new GameObject[4];
+        public const int TabCount = 5;
+        public Button[] TabButtons = new Button[TabCount];
+        public GameObject[] Pages = new GameObject[TabCount];
         public RectTransform SummaryLeft;
         public RectTransform SummaryRight;
         public WorldMapView MapView;
         public RectTransform[] ChartSlots = new RectTransform[4];
-        public RectTransform PhysicsLeft;
-        public RectTransform PhysicsRight;
+        public RectTransform PhysicsRoot;
+        public RectTransform EffectsRoot;
 
         /// <summary>Scenario run when the scene is opened in the editor without a finished run.</summary>
         public static Func<MeteorProperties> PreviewScenario = () => MeteorProperties.FromInputs(60000, 7800, 800, 0.5, 1, 1, 1);
@@ -82,7 +84,10 @@ namespace MTS.Results
         public void Populate()
         {
             SimulationSession session = SimulationSession.Instance;
-            Report = OutcomeReport.Build(session.Result, session.Impact, session.Properties);
+            MeteorComposition composition = session.Properties != null && session.Composition.Material == session.Properties.Material
+                ? session.Composition
+                : null;
+            Report = OutcomeReport.Build(session.Result, session.Impact, session.Properties, composition);
             Canvas.ForceUpdateCanvases();
 
             ApplyPixelFont();
@@ -118,6 +123,7 @@ namespace MTS.Results
             Canvas.ForceUpdateCanvases();
             ResultsPages.BuildSummary(this, session);
             MapView.Show(Report, session.Impact?.FinalCraterDiameter ?? 0.0, Assets);
+            ResultsPages.BuildEffects(this);
             ResultsPages.BuildCharts(this, session);
             ResultsPages.BuildPhysics(this);
             Canvas.ForceUpdateCanvases();
@@ -196,8 +202,8 @@ namespace MTS.Results
 
         private void Update()
         {
-            // Keyboard shortcuts: 1-4 switch tabs.
-            for (int i = 0; i < 4; i++)
+            // Keyboard shortcuts: 1-5 switch tabs.
+            for (int i = 0; i < TabCount; i++)
             {
                 if (Input.GetKeyDown(KeyCode.Alpha1 + i))
                 {

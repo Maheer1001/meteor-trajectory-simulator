@@ -31,7 +31,25 @@ namespace MTS.Results.Editor
             ["airburst"] = () => AtEntry(Sphere(19, 3300), MeteorMaterialPresets.OrdinaryChondrite, 54.6, 57.6, 19000, 18, true),
             // A 20 kg fragile meteoroid at 30 km/s without fragmentation: burns up high in the atmosphere.
             ["disintegrated"] = () => AtEntry(20, MeteorMaterial.CreateCustom(1000, 800, 0), 48.9, 2.3, 30000, 60, false),
+            // The impact scenarios (ImpactScenarios.All) at their real locations, entering from the west.
+            ["chelyabinsk"] = () => Scenario(ImpactScenarios.Chelyabinsk, 54.8, 59.0),
+            ["meteor-crater"] = () => Scenario(ImpactScenarios.Barringer, 35.0, -112.4),
+            ["chicxulub"] = () => Scenario(ImpactScenarios.Chicxulub, 20.6, -90.4),
+            // A 1 km asteroid of mixed composition hitting the Pacific off California: a tsunami.
+            ["ocean"] = () => Scenario(ImpactScenarios.RegionalKiller, 30.0, -140.0, MeteorComposition.Create(new[]
+            {
+                (MeteorMaterialPresets.OrdinaryChondriteId, 55.0), (MeteorMaterialPresets.IronId, 25.0),
+                (MeteorMaterialPresets.CarbonaceousId, 15.0), (MeteorMaterialPresets.EnstatiteId, 5.0),
+            })),
         };
+
+        /// <summary>A scenario entering at the given point; also sets the session's composition for the report.</summary>
+        public static MeteorProperties Scenario(ImpactScenario s, double lat, double lon, MeteorComposition composition = null)
+        {
+            composition = composition ?? s.Composition;
+            SimulationSession.Instance.Composition = composition;
+            return AtEntry(s.Mass, composition.Material, lat, lon, s.EntrySpeed, s.EntryAngleDegrees, true);
+        }
 
         private static double Sphere(double diameter, double density) => density * Math.PI / 6.0 * Math.Pow(diameter, 3);
 
@@ -58,14 +76,20 @@ namespace MTS.Results.Editor
             Directory.CreateDirectory(dir);
             try
             {
-                Capture("impact", dir, Hd, true);
-                Capture("airburst", dir, Hd, true);
-                Capture("disintegrated", dir, Hd, true);
-                Capture("default", dir, Hd, true);
-                Capture("impact", dir, new Vector2Int(1366, 768), false);
-                Capture("impact", dir, new Vector2Int(2560, 1440), false);
-                Capture("impact", dir, new Vector2Int(3840, 2160), false);
-                Capture("airburst", dir, new Vector2Int(1366, 768), false, ResultsScreen.Tab.Map);
+                string only = Argument("-resultsCaptureOnly");
+                foreach (string scenario in new[] { "chelyabinsk", "meteor-crater", "chicxulub", "ocean", "disintegrated" })
+                {
+                    if (only == null || only == scenario) Capture(scenario, dir, Hd, true);
+                }
+
+                if (only == null || only == "sizes")
+                {
+                    Capture("chicxulub", dir, new Vector2Int(1366, 768), false);
+                    Capture("chicxulub", dir, new Vector2Int(2560, 1440), false);
+                    Capture("chicxulub", dir, new Vector2Int(3840, 2160), false);
+                    Capture("chicxulub", dir, new Vector2Int(1366, 768), false, ResultsScreen.Tab.Effects);
+                    Capture("ocean", dir, new Vector2Int(3840, 2160), false, ResultsScreen.Tab.Map);
+                }
             }
             catch (Exception e)
             {
@@ -78,6 +102,7 @@ namespace MTS.Results.Editor
         public static void Capture(string scenario, string dir, Vector2Int size, bool allTabs, ResultsScreen.Tab only = ResultsScreen.Tab.Summary)
         {
             SimulationSession session = SimulationSession.Instance;
+            session.Composition = null; // default; scenarios with a composition set their own
             session.Begin(Scenarios[scenario]()).RunToEnd();
             ImpactAssessment impact = session.Impact;
             Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
@@ -102,10 +127,11 @@ namespace MTS.Results.Editor
             Canvas.ForceUpdateCanvases();
 
             screen.Populate();
+            LogEffects(scenario, screen.Report);
             screen.SetPlaceName(GeocodeApiKey.Load() == null ? "" : "(place lookup runs in play mode)");
 
             var tabs = allTabs
-                ? new[] { ResultsScreen.Tab.Summary, ResultsScreen.Tab.Map, ResultsScreen.Tab.Charts, ResultsScreen.Tab.Physics }
+                ? (ResultsScreen.Tab[])Enum.GetValues(typeof(ResultsScreen.Tab))
                 : new[] { only };
             foreach (ResultsScreen.Tab tab in tabs)
             {
@@ -119,6 +145,26 @@ namespace MTS.Results.Editor
             cam.targetTexture = null;
             rt.Release();
             UnityEngine.Object.DestroyImmediate(rt);
+        }
+
+        private static void LogEffects(string scenario, OutcomeReport r)
+        {
+            ImpactEffects fx = r.Effects;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendFormat(System.Globalization.CultureInfo.InvariantCulture,
+                "Effects {0}: {1} | {2} | ocean={3} global={4} M={5:F2} fireball={6:F0} m crater={7:F0} m",
+                scenario, r.Headline, r.Comparison, fx.IsOcean, fx.Global, fx.Magnitude, fx.FireballRadius, fx.FinalCraterDiameter);
+            foreach (ThermalThreshold t in fx.Thermal) sb.AppendFormat(" | {0} {1:F0} m", t.Name, t.Radius);
+            foreach (EffectRadius e in fx.Seismic) sb.AppendFormat(" | shaking {0} {1:F0} m", e.Name, e.Radius);
+            foreach (EffectRadius e in fx.Ejecta) sb.AppendFormat(" | {0} {1:F0} m", e.Name, e.Radius);
+            if (fx.HasTsunami)
+            {
+                sb.AppendFormat(" | water cavity {0:F0} m rim wave {1:F0} m seafloor v {2:F0}", fx.WaterCraterDiameter, fx.RimWaveAmplitude, fx.SeafloorSpeed);
+                foreach (EffectRadius e in fx.Tsunami) sb.AppendFormat(" | {0} {1:F0} m", e.Name, e.Radius);
+            }
+
+            foreach (RingRow ring in r.Rings) sb.AppendFormat(" | {0} {1:F0} m", ResultsFormat.Psi(ring.Overpressure), ring.Radius);
+            Debug.Log(sb.ToString());
         }
 
         private static void Save(Camera cam, RenderTexture rt, string file)

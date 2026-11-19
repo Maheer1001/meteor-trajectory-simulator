@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MTS.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -36,6 +37,10 @@ namespace MTS.Results
         private TextMeshProUGUI placeLabel;
         private TextMeshProUGUI coordLabel;
 
+        private RectTransform legendRoot;
+        /// <summary>Which ring groups (<see cref="EffectGroup"/>) are drawn; toggled from the legend.</summary>
+        private readonly bool[] layerOn = { true, true, true, true, true };
+
         private float zoom = 1f;
         private Vector2 centre = new Vector2(0.5f, 0.5f);
         private float growth = 1f;
@@ -46,13 +51,32 @@ namespace MTS.Results
         public float Zoom => zoom;
         public Vector2 Centre => centre;
 
+        /// <summary>Order in which layers are hidden when the legend would not fit (blast is kept longest).</summary>
+        private static readonly EffectGroup[] TrimOrder = { EffectGroup.Ejecta, EffectGroup.Seismic, EffectGroup.Thermal, EffectGroup.Tsunami };
+
+        public bool IsLayerOn(EffectGroup group) => layerOn[(int)group];
+
+        /// <summary>Shows or hides a ring group; other groups are hidden if the legend would not fit.</summary>
+        public void SetLayer(EffectGroup group, bool on)
+        {
+            layerOn[(int)group] = on;
+            TrimLayers(group);
+            RebuildLegend();
+            FitToRings();
+            Redraw();
+        }
+
         /// <summary>Builds the map for a report. Called once by the results screen.</summary>
         public void Show(OutcomeReport outcome, double finalCraterDiameter, ResultsAssets art)
         {
             report = outcome;
             craterDiameter = finalCraterDiameter;
             assets = art;
+            for (int i = 0; i < layerOn.Length; i++) layerOn[i] = true;
             Build();
+            Canvas.ForceUpdateCanvases();
+            TrimLayers(null);
+            RebuildLegend();
             FitToRings();
             BuildCloseUp((RectTransform)transform);
             Redraw();
@@ -105,7 +129,8 @@ namespace MTS.Results
             marker = ResultsUi.Stretch(ResultsUi.Node("Marker", content)).gameObject.AddComponent<UiLines>();
 
             BuildLocationBox(root);
-            BuildLegend(root);
+            legendRoot = ResultsUi.Node("LegendRoot", root);
+            ResultsUi.Stretch(legendRoot);
             BuildControls(root);
             built = true;
         }
@@ -117,7 +142,7 @@ namespace MTS.Results
             placeLabel = ResultsUi.Text(box, "Place", "Looking up location...", assets.BodyFont, 26, ResultsTheme.Text, TextAlignmentOptions.TopLeft, true);
             ResultsUi.Stretch(placeLabel.rectTransform, 22, 44, 22, 14);
             placeLabel.enableAutoSizing = true;
-            placeLabel.fontSizeMin = 16;
+            placeLabel.fontSizeMin = 20;
             placeLabel.fontSizeMax = 26;
             string where = report.HasLocation ? ResultsFormat.LatLon(report.Location.Lat, report.Location.Lon) : "Location unknown";
             if (report.EventAltitude > 1)
@@ -125,11 +150,33 @@ namespace MTS.Results
                 where += "  ·  " + ResultsFormat.Distance(report.EventAltitude) + " up";
             }
 
-            coordLabel = ResultsUi.Text(box, "Coordinates", where, assets.BodyFont, 20, ResultsTheme.Accent, TextAlignmentOptions.BottomLeft);
+            if (report.IsOcean)
+            {
+                where += "  ·  ocean";
+            }
+
+            coordLabel = ResultsUi.Text(box, "Coordinates", where, assets.BodyFont, 22, ResultsTheme.Accent, TextAlignmentOptions.BottomLeft);
             ResultsUi.Stretch(coordLabel.rectTransform, 22, 14, 22, 50);
         }
 
-        private void BuildLegend(RectTransform root)
+        private const float LegendWidth = 500f;
+        private const float LegendTitleHeight = 62f;
+        private const float GroupRowHeight = 42f;
+        private const float RingRowHeight = 34f;
+
+        private static string GroupName(EffectGroup g)
+        {
+            switch (g)
+            {
+                case EffectGroup.Blast: return "Blast wave";
+                case EffectGroup.Thermal: return "Heat (fireball)";
+                case EffectGroup.Seismic: return "Ground shaking";
+                case EffectGroup.Ejecta: return "Falling debris";
+                default: return "Tsunami";
+            }
+        }
+
+        private List<RingRow> BlastRows()
         {
             var rows = new List<RingRow>();
             foreach (RingRow r in report.Rings)
@@ -137,53 +184,169 @@ namespace MTS.Results
                 if (r.Reached) rows.Add(r);
             }
 
-            bool crater = craterDiameter > 0;
-            int lines = rows.Count + (crater ? 1 : 0);
-            float height = 96 + Mathf.Max(1, lines) * 44 + 20;
-            RectTransform box = ResultsUi.Card(root, "Legend", assets);
-            ResultsUi.Place(box, new Vector2(1, 1), new Vector2(-34, -34), new Vector2(430, height));
-            TextMeshProUGUI title = ResultsUi.Heading(box, "DAMAGE RINGS", assets, 26);
-            ResultsUi.TopBand(title.rectTransform, 18, 32, 22, 22);
-            TextMeshProUGUI sub = ResultsUi.Text(box, "Sub", "peak overpressure → ground range", assets.BodyFont, 17, ResultsTheme.Muted);
-            ResultsUi.TopBand(sub.rectTransform, 54, 26, 22, 22);
+            return rows;
+        }
 
-            float y = 96;
-            if (lines == 0)
+        private List<EffectRing> GroupRings(EffectGroup g)
+        {
+            var rows = new List<EffectRing>();
+            foreach (EffectRing r in report.EffectRings)
             {
-                TextMeshProUGUI none = ResultsUi.Text(box, "None", "No damaging blast reached the ground", assets.BodyFont, 19, ResultsTheme.Text);
-                ResultsUi.TopBand(none.rectTransform, y, 40, 22, 22);
-                return;
+                if (r.Group == g) rows.Add(r);
             }
 
-            if (crater)
+            rows.Sort((a, b) => a.Radius.CompareTo(b.Radius));
+            return rows;
+        }
+
+        private int GroupRingCount(EffectGroup g) =>
+            g == EffectGroup.Blast ? BlastRows().Count + (craterDiameter > 0 ? 1 : 0) : GroupRings(g).Count;
+
+        private bool GroupPresent(EffectGroup g) => GroupRingCount(g) > 0;
+
+        private float LegendHeight()
+        {
+            float h = LegendTitleHeight + 14;
+            int groups = 0;
+            foreach (EffectGroup g in (EffectGroup[])Enum.GetValues(typeof(EffectGroup)))
             {
-                AddLegendRow(box, y, ResultsTheme.Crater, Color.white, "Crater rim", ResultsFormat.Distance(craterDiameter) + " wide");
-                y += 44;
+                if (!GroupPresent(g)) continue;
+                groups++;
+                h += GroupRowHeight;
+                if (layerOn[(int)g]) h += GroupRingCount(g) * RingRowHeight;
             }
 
-            for (int i = rows.Count - 1; i >= 0; i--)
+            return groups == 0 ? LegendTitleHeight + 60 : h;
+        }
+
+        private float LegendCapacity() => Mathf.Max(300f, viewport.rect.height - 40f);
+
+        /// <summary>Hides layers (least important first, never <paramref name="keep"/>) until the legend fits.</summary>
+        private void TrimLayers(EffectGroup? keep)
+        {
+            float capacity = LegendCapacity();
+            foreach (EffectGroup g in TrimOrder)
             {
-                RingRow r = rows[i];
-                Color c = ResultsTheme.Rings[r.Index % ResultsTheme.Rings.Length];
-                AddLegendRow(box, y, c * new Color(1, 1, 1, 0.55f), c, ResultsFormat.Psi(r.Overpressure), ResultsFormat.Distance(r.Radius));
-                y += 44;
+                if (LegendHeight() <= capacity) return;
+                if (keep.HasValue && keep.Value == g) continue;
+                if (GroupPresent(g)) layerOn[(int)g] = false;
+            }
+
+            if (LegendHeight() > capacity && !(keep.HasValue && keep.Value == EffectGroup.Blast))
+            {
+                layerOn[(int)EffectGroup.Blast] = false;
             }
         }
 
-        private void AddLegendRow(RectTransform box, float y, Color fill, Color edge, string label, string value)
+        private void RebuildLegend()
         {
-            RectTransform swatch = ResultsUi.PixelBox(box, "Swatch", assets, fill, edge, false, 6f, ResultsUi.SmallBoxPixelScale);
-            ResultsUi.Place(swatch, new Vector2(0, 1), new Vector2(24, -y - 6), new Vector2(30, 30));
-            TextMeshProUGUI l = ResultsUi.Text(box, "Label", label, assets.BodyFont, 21, ResultsTheme.Text, TextAlignmentOptions.Left, true);
-            ResultsUi.TopBand(l.rectTransform, y, 42, 68, 22);
-            TextMeshProUGUI v = ResultsUi.Text(box, "Value", value, assets.BodyFont, 21, ResultsTheme.Accent, TextAlignmentOptions.Right, true);
-            ResultsUi.TopBand(v.rectTransform, y, 42, 68, 24);
+            ResultsUi.DestroyChildren(legendRoot);
+            float height = LegendHeight();
+            RectTransform box = ResultsUi.Card(legendRoot, "Legend", assets);
+            ResultsUi.Place(box, new Vector2(1, 1), new Vector2(-34, -34), new Vector2(LegendWidth, height));
+            TextMeshProUGUI title = ResultsUi.Heading(box, "MAP LAYERS", assets, 30);
+            ResultsUi.TopBand(title.rectTransform, 18, 34, 24, 24);
+            TextMeshProUGUI sub = ResultsUi.Text(box, "Sub", "click to show or hide", assets.BodyFont, 20, ResultsTheme.Muted, TextAlignmentOptions.TopRight);
+            ResultsUi.TopBand(sub.rectTransform, 24, 30, 24, 24);
+
+            float y = LegendTitleHeight + 4;
+            bool any = false;
+            foreach (EffectGroup g in (EffectGroup[])Enum.GetValues(typeof(EffectGroup)))
+            {
+                if (!GroupPresent(g)) continue;
+                any = true;
+                AddGroupRow(box, y, g);
+                y += GroupRowHeight;
+                if (!layerOn[(int)g]) continue;
+                if (g == EffectGroup.Blast)
+                {
+                    if (craterDiameter > 0)
+                    {
+                        AddLegendRow(box, y, ResultsTheme.Crater, Color.white, "Crater rim", ResultsFormat.Distance(craterDiameter) + " wide", false);
+                        y += RingRowHeight;
+                    }
+
+                    List<RingRow> rows = BlastRows();
+                    for (int i = rows.Count - 1; i >= 0; i--)
+                    {
+                        RingRow r = rows[i];
+                        Color c = ResultsTheme.Rings[r.Index % ResultsTheme.Rings.Length];
+                        AddLegendRow(box, y, c * new Color(1, 1, 1, 0.55f), c, ResultsFormat.Psi(r.Overpressure) + " overpressure", ResultsFormat.Reach(r.Radius), false);
+                        y += RingRowHeight;
+                    }
+                }
+                else
+                {
+                    foreach (EffectRing r in GroupRings(g))
+                    {
+                        Color c = ResultsTheme.EffectColor(g, r.Level);
+                        AddLegendRow(box, y, new Color(0, 0, 0, 0), c, r.Label, ResultsFormat.Reach(r.Radius), true);
+                        y += RingRowHeight;
+                    }
+                }
+            }
+
+            if (!any)
+            {
+                TextMeshProUGUI none = ResultsUi.Text(box, "None", "No damaging effects reached the ground", assets.BodyFont, 22, ResultsTheme.Text);
+                ResultsUi.TopBand(none.rectTransform, y, 40, 24, 24);
+            }
+        }
+
+        private void AddGroupRow(RectTransform box, float y, EffectGroup g)
+        {
+            bool on = layerOn[(int)g];
+            RectTransform row = ResultsUi.Node("Layer" + g, box);
+            ResultsUi.TopBand(row, y, GroupRowHeight - 4, 14, 14);
+            Image hit = row.gameObject.AddComponent<Image>();
+            hit.color = new Color(1, 1, 1, on ? 0.07f : 0.03f);
+            hit.raycastTarget = true;
+            Button button = row.gameObject.AddComponent<Button>();
+            button.targetGraphic = hit;
+            EffectGroup group = g;
+            button.onClick.AddListener(() => SetLayer(group, !layerOn[(int)group]));
+
+            Color c = g == EffectGroup.Blast ? ResultsTheme.Rings[0] : ResultsTheme.EffectColor(g, 0);
+            RectTransform check = ResultsUi.PixelBox(row, "Check", assets, on ? c : new Color(0, 0, 0, 0.4f), c, false, 6f, ResultsUi.SmallBoxPixelScale);
+            ResultsUi.Place(check, new Vector2(0, 0.5f), new Vector2(14, 0), new Vector2(24, 24));
+            TextMeshProUGUI name = ResultsUi.Text(row, "Name", GroupName(g), assets.BodyFont, 22, on ? ResultsTheme.Text : ResultsTheme.Muted, TextAlignmentOptions.Left, true);
+            name.enableWordWrapping = false;
+            ResultsUi.Stretch(name.rectTransform, 52, 0, 10, 0);
+            int count = GroupRingCount(g);
+            string state = on ? count + (count == 1 ? " ring" : " rings") : "hidden";
+            TextMeshProUGUI value = ResultsUi.Text(row, "State", state, assets.BodyFont, 20, ResultsTheme.Muted, TextAlignmentOptions.Right);
+            value.enableWordWrapping = false;
+            ResultsUi.Stretch(value.rectTransform, 52, 0, 12, 0);
+        }
+
+        private void AddLegendRow(RectTransform box, float y, Color fill, Color edge, string label, string value, bool dashed)
+        {
+            if (dashed)
+            {
+                UiLines sw = ResultsUi.Node("Swatch", box).gameObject.AddComponent<UiLines>();
+                ResultsUi.Place(sw.rectTransform, new Vector2(0, 1), new Vector2(40, -y - 6), new Vector2(26, 22));
+                sw.Segment(new Vector2(0, 11), new Vector2(9, 11), 4f, edge);
+                sw.Segment(new Vector2(15, 11), new Vector2(26, 11), 4f, edge);
+                sw.Commit();
+            }
+            else
+            {
+                RectTransform swatch = ResultsUi.PixelBox(box, "Swatch", assets, fill, edge, false, 6f, ResultsUi.SmallBoxPixelScale);
+                ResultsUi.Place(swatch, new Vector2(0, 1), new Vector2(42, -y - 6), new Vector2(22, 22));
+            }
+
+            TextMeshProUGUI l = ResultsUi.Text(box, "Label", label, assets.BodyFont, 20, ResultsTheme.Text, TextAlignmentOptions.Left);
+            l.enableWordWrapping = false;
+            ResultsUi.TopBand(l.rectTransform, y, RingRowHeight, 80, 190);
+            TextMeshProUGUI v = ResultsUi.Text(box, "Value", value, assets.BodyFont, 20, ResultsTheme.Accent, TextAlignmentOptions.Right, true);
+            v.enableWordWrapping = false;
+            ResultsUi.TopBand(v.rectTransform, y, RingRowHeight, 250, 26);
         }
 
         private void BuildControls(RectTransform root)
         {
             string[] labels = { "+", "-", "FIT" };
-            float x = -490;
+            float x = -34 - LegendWidth - 24;
             for (int i = 0; i < labels.Length; i++)
             {
                 Button b = ResultsUi.PixelButton(root, "Zoom" + labels[i], labels[i], assets, i < 2 ? 40 : 26);
@@ -203,12 +366,12 @@ namespace MTS.Results
             }
 
             RectTransform bar = ResultsUi.Card(root, "Scale", assets);
-            ResultsUi.Place(bar, new Vector2(0, 0), new Vector2(34, 34), new Vector2(330, 84));
+            ResultsUi.Place(bar, new Vector2(0, 0), new Vector2(34, 34), new Vector2(380, 84));
             scaleBar = ResultsUi.Stretch(ResultsUi.Node("Bar", bar), 22, 16, 22, 50).gameObject.AddComponent<UiLines>();
-            scaleLabel = ResultsUi.Text(bar, "Label", "", assets.BodyFont, 19, ResultsTheme.Text, TextAlignmentOptions.TopLeft);
+            scaleLabel = ResultsUi.Text(bar, "Label", "", assets.BodyFont, 20, ResultsTheme.Text, TextAlignmentOptions.TopLeft);
             ResultsUi.Stretch(scaleLabel.rectTransform, 22, 40, 18, 12);
 
-            TextMeshProUGUI hint = ResultsUi.Text(root, "Hint", "Drag to pan  ·  scroll to zoom", assets.BodyFont, 19,
+            TextMeshProUGUI hint = ResultsUi.Text(root, "Hint", "Drag to pan  ·  scroll to zoom", assets.BodyFont, 20,
                 new Color(1, 1, 1, 0.7f), TextAlignmentOptions.BottomRight);
             ResultsUi.Place(hint.rectTransform, new Vector2(1, 0), new Vector2(-34, 26), new Vector2(500, 30));
         }
@@ -238,15 +401,15 @@ namespace MTS.Results
                 return;
             }
 
-            double outer = craterDiameter / 2.0;
-            foreach (RingRow r in report.Rings)
-            {
-                outer = Math.Max(outer, r.Radius);
-            }
-
+            double outer = OuterRadius();
             Vector2 view = viewport.rect.size;
             float baseHeight = BaseSize().y;
-            if (outer > 0 && view.y > 0)
+            if (outer >= 0.25 * ImpactEffects.GlobalRange)
+            {
+                // Continental to planet-scale footprints: show the whole world.
+                zoom = 1f;
+            }
+            else if (outer > 0 && view.y > 0)
             {
                 double mapHeightNeeded = 0.6 * view.y * MapProjection.MetresPerMapHeight / (2.0 * outer);
                 // Do not blow the 800 px map texture up beyond about 14 screen pixels per texel when fitting:
@@ -404,28 +567,58 @@ namespace MTS.Results
                 double lonShift = MapProjection.ToMap(c).X * 360.0 - 180.0 + MapProjection.CentralMeridian - c.Lon;
                 var centreWrapped = new GeoPoint(c.Lat, c.Lon + lonShift);
 
-                for (int i = report.Rings.Count - 1; i >= 0; i--)
+                if (layerOn[(int)EffectGroup.Blast])
                 {
-                    RingRow r = report.Rings[i];
-                    if (!r.Reached) continue;
-                    Color col = ResultsTheme.Rings[r.Index % ResultsTheme.Rings.Length];
-                    DrawRing(centreWrapped, cp, r.Radius * growth, size, col * new Color(1, 1, 1, 0.17f), col, 2.6f);
+                    for (int i = report.Rings.Count - 1; i >= 0; i--)
+                    {
+                        RingRow r = report.Rings[i];
+                        if (!r.Reached) continue;
+                        Color col = ResultsTheme.Rings[r.Index % ResultsTheme.Rings.Length];
+                        DrawRing(centreWrapped, cp, r.Radius * growth, size, col * new Color(1, 1, 1, 0.15f), col, 2.6f, false);
+                    }
                 }
 
-                if (craterDiameter > 0)
+                foreach (EffectRing r in report.EffectRings)
                 {
-                    DrawRing(centreWrapped, cp, craterDiameter / 2.0 * growth, size, ResultsTheme.Crater * new Color(1, 1, 1, 0.85f), Color.white, 2f);
+                    if (!layerOn[(int)r.Group]) continue;
+                    DrawRing(centreWrapped, cp, r.Radius * growth, size, Color.clear, ResultsTheme.EffectColor(r.Group, r.Level), 3f, true);
+                }
+
+                if (craterDiameter > 0 && layerOn[(int)EffectGroup.Blast])
+                {
+                    DrawRing(centreWrapped, cp, craterDiameter / 2.0 * growth, size, ResultsTheme.Crater * new Color(1, 1, 1, 0.85f), Color.white, 2f, false);
                 }
             }
 
             overlay.Commit();
         }
 
-        private void DrawRing(GeoPoint centre, Vector2 centrePx, double radius, Vector2 size, Color fill, Color edge, float width)
+        private void DrawRing(GeoPoint centre, Vector2 centrePx, double radius, Vector2 size, Color fill, Color edge, float width, bool dashed)
         {
             if (!(radius > 0))
             {
                 return;
+            }
+
+            float pixelRadius = (float)(radius / MapProjection.MetresPerMapHeight) * size.y;
+            bool whole = radius >= ImpactModel.MaxGroundRange * 0.999;
+            int pole = Geodesy.EnclosedPole(centre, radius);
+            bool bands = pixelRadius > 60f || pole != 0;
+            if (fill.a > 0)
+            {
+                if (whole)
+                {
+                    overlay.Rect(new Rect(-size.x, 0, 3 * size.x, size.y), fill);
+                }
+                else if (bands)
+                {
+                    FillBands(centre, radius, size, fill);
+                }
+            }
+
+            if (whole)
+            {
+                return; // the whole planet: there is no edge to draw
             }
 
             GeoPoint[] ring = Geodesy.Circle(centre, radius, RingSegments);
@@ -439,8 +632,6 @@ namespace MTS.Results
                 maxX = Mathf.Max(maxX, p.x);
             }
 
-            float pixelRadius = (float)(radius / MapProjection.MetresPerMapHeight) * size.y;
-            int pole = Geodesy.EnclosedPole(centre, radius);
             for (int copy = -1; copy <= 1; copy++)
             {
                 if (copy == -1 && maxX <= size.x && pole == 0) continue;
@@ -449,16 +640,57 @@ namespace MTS.Results
                 Vector2 offset = new Vector2(copy * size.x, 0);
                 foreach (Vector2 p in pts) shifted.Add(p + offset);
 
-                if (pole != 0)
-                {
-                    overlay.FillToY(shifted, pole > 0 ? size.y : 0f, fill);
-                }
-                else if (pixelRadius > 1.5f)
+                if (fill.a > 0 && !bands && pixelRadius > 1.5f)
                 {
                     overlay.Fan(centrePx + offset, shifted, fill);
                 }
 
-                overlay.Polyline(shifted, Mathf.Min(width, Mathf.Max(1f, pixelRadius)), edge);
+                float w = Mathf.Min(width, Mathf.Max(1f, pixelRadius));
+                if (dashed)
+                {
+                    overlay.DashedPolyline(shifted, w + 2.5f, 14f, 9f, new Color(0, 0, 0, 0.55f));
+                    overlay.DashedPolyline(shifted, w, 14f, 9f, edge);
+                }
+                else
+                {
+                    overlay.Polyline(shifted, w, edge);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fills the inside of a geodesic circle of any size as horizontal bands: on each parallel the inside is one
+        /// longitude interval (<see cref="Geodesy.HalfWidthAtLatitude"/>), so circles that wrap round the map, contain a
+        /// pole or even both poles (wider than a hemisphere) fill correctly.
+        /// </summary>
+        private void FillBands(GeoPoint centre, double radius, Vector2 size, Color fill)
+        {
+            double dDeg = radius / PhysicalConstants.EarthRadius * 180.0 / Math.PI;
+            double latLo = Math.Max(-90.0, centre.Lat - dDeg);
+            double latHi = Math.Min(90.0, centre.Lat + dDeg);
+            float spanPx = (float)((latHi - latLo) / 180.0) * size.y;
+            int count = Mathf.Clamp(Mathf.CeilToInt(spanPx / 4f), 8, 360);
+            double cx = MapProjection.ToMap(centre, false).X * size.x;
+            double pxPerDeg = size.x / 360.0;
+            for (int i = 0; i < count; i++)
+            {
+                double la = latLo + (latHi - latLo) * i / count;
+                double lb = latLo + (latHi - latLo) * (i + 1) / count;
+                double wa = Geodesy.HalfWidthAtLatitude(centre, radius, la);
+                double wb = Geodesy.HalfWidthAtLatitude(centre, radius, lb);
+                if (wa < 0 && wb < 0) continue;
+                wa = Math.Max(0.0, Math.Min(180.0, wa));
+                wb = Math.Max(0.0, Math.Min(180.0, wb));
+                float ya = (float)((la + 90.0) / 180.0) * size.y;
+                float yb = (float)((lb + 90.0) / 180.0) * size.y;
+                float ha = (float)(wa * pxPerDeg), hb = (float)(wb * pxPerDeg);
+                for (int copy = -1; copy <= 1; copy++)
+                {
+                    float c = (float)cx + copy * size.x;
+                    float h = Mathf.Max(ha, hb);
+                    if (c + h < 0 || c - h > size.x) continue;
+                    overlay.Quad(new Vector2(c - ha, ya), new Vector2(c + ha, ya), new Vector2(c + hb, yb), new Vector2(c - hb, yb), fill);
+                }
             }
         }
 
@@ -534,8 +766,8 @@ namespace MTS.Results
             scaleBar.Rect(new Rect(0, y - 3, pixels / 2f, 6), Color.white);
             scaleBar.Rect(new Rect(pixels / 2f, y - 3, pixels / 2f, 6), ResultsTheme.Red);
             scaleBar.Commit();
-            scaleLabel.text = ScaleText(nice) + "   <color=#B8B8CC><size=16>east-west at " +
-                              Math.Abs(lat).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "° " + (lat >= 0 ? "N" : "S") + "</size></color>";
+            scaleLabel.text = ScaleText(nice) + "   <color=#B8B8CC>east-west at " +
+                              Math.Abs(lat).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "° " + (lat >= 0 ? "N" : "S") + "</color>";
         }
 
         private static string ScaleText(double metres) =>
@@ -543,12 +775,19 @@ namespace MTS.Results
                 ? (metres / 1000.0).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " km"
                 : metres.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " m";
 
+        /// <summary>Largest radius among the visible layers (the crater counts with the blast layer).</summary>
         private double OuterRadius()
         {
-            double outer = craterDiameter / 2.0;
-            foreach (RingRow r in report.Rings)
+            double outer = 0;
+            if (layerOn[(int)EffectGroup.Blast])
             {
-                outer = Math.Max(outer, r.Radius);
+                outer = craterDiameter / 2.0;
+                foreach (RingRow r in report.Rings) outer = Math.Max(outer, r.Radius);
+            }
+
+            foreach (EffectRing r in report.EffectRings)
+            {
+                if (layerOn[(int)r.Group]) outer = Math.Max(outer, r.Radius);
             }
 
             return outer;
@@ -585,9 +824,9 @@ namespace MTS.Results
 
             closeUp = ResultsUi.Card(root, "CloseUp", assets);
             ResultsUi.Place(closeUp, new Vector2(0, 0), new Vector2(34, 134), new Vector2(400, 420));
-            TextMeshProUGUI title = ResultsUi.Heading(closeUp, "CLOSE-UP", assets, 24);
+            TextMeshProUGUI title = ResultsUi.Heading(closeUp, "CLOSE-UP", assets, 30);
             ResultsUi.TopBand(title.rectTransform, 16, 30, 22, 22);
-            TextMeshProUGUI sub = ResultsUi.Text(closeUp, "Sub", "footprint to scale", assets.BodyFont, 17, ResultsTheme.Muted, TextAlignmentOptions.TopRight);
+            TextMeshProUGUI sub = ResultsUi.Text(closeUp, "Sub", "to scale", assets.BodyFont, 20, ResultsTheme.Muted, TextAlignmentOptions.TopRight);
             ResultsUi.TopBand(sub.rectTransform, 22, 26, 22, 22);
 
             RectTransform area = ResultsUi.Node("Rings", closeUp);
@@ -640,7 +879,7 @@ namespace MTS.Results
             bar.Rect(new Rect(barPx / 2f, 12, barPx / 2f, 6), ResultsTheme.Red);
             bar.Commit();
             lines.Commit();
-            TextMeshProUGUI label = ResultsUi.Text(closeUp, "ScaleLabel", ScaleText(barMetres), assets.BodyFont, 19, ResultsTheme.Text, TextAlignmentOptions.BottomLeft);
+            TextMeshProUGUI label = ResultsUi.Text(closeUp, "ScaleLabel", ScaleText(barMetres), assets.BodyFont, 20, ResultsTheme.Text, TextAlignmentOptions.BottomLeft);
             ResultsUi.Place(label.rectTransform, new Vector2(0, 0), new Vector2(34 + barPx, 24), new Vector2(200, 28));
         }
 
