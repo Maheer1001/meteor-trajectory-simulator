@@ -204,10 +204,12 @@ namespace MTS.Menus.Editor
             foreach (Vector2Int size in sizes) Render(screen.GetComponent<Canvas>(), dir, name, size);
         }
 
+        /// <summary>Waits n frames and at least a third of a second (button colour fades take 0.1 s).</summary>
         private static IEnumerator Frames(int n)
         {
             int target = Time.frameCount + n;
-            while (Time.frameCount < target) yield return null;
+            float until = Time.realtimeSinceStartup + 0.35f;
+            while (Time.frameCount < target || Time.realtimeSinceStartup < until) yield return null;
         }
 
         private static void Render(Canvas canvas, string dir, string name, Vector2Int size)

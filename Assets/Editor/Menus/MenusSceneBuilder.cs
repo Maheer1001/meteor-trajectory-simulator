@@ -31,6 +31,7 @@ namespace MTS.Menus.Editor
         private const string BoxFillPath = ArtFolder + "/MenuBoxFill.png";
         private const string BoxOutlinePath = ArtFolder + "/MenuBoxOutline.png";
         private const string BackgroundPath = ArtFolder + "/MenuBackground.jpg";
+        private const string BodyMaterialPath = ArtFolder + "/MenuBody SDF Material.mat";
         private const string BodyFontPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset";
         private const string PixelFontPath = "Assets/TextMesh Pro/Examples & Extras/Resources/Fonts & Materials/Electronic Highway Sign SDF.asset";
 
@@ -100,6 +101,11 @@ namespace MTS.Menus.Editor
 
         private static void Save(Ctx ctx, string path)
         {
+            foreach (TMP_Text t in ctx.Root.GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (t.font == ctx.A.BodyFont) t.fontSharedMaterial = ctx.A.BodyMaterial;
+            }
+
             EditorSceneManager.MarkSceneDirty(ctx.Scene);
             EditorSceneManager.SaveScene(ctx.Scene, path);
             AssetDatabase.SaveAssets();
@@ -511,24 +517,23 @@ namespace MTS.Menus.Editor
             float sy = 460f;
             MenuUi.Divider(card, sy - 16, MenuTheme.Padding);
             RectTransform swatch = MenuUi.PixelBox(card, "BlendSwatch", a, Color.gray, new Color(1, 1, 1, 0.55f), true, 4f, MenuUi.SmallBoxPixelScale);
-            MenuUi.TopLeft(swatch, MenuTheme.Padding, sy + 6, 112, 112);
+            MenuUi.TopLeft(swatch, MenuTheme.Padding, sy + 4, 112, 112);
             screen.swatchBase = swatch.Find("Fill").GetComponent<Image>();
             Image accent = MenuUi.Image(swatch, "Accent", a.BoxFill, Color.white, true, MenuUi.SmallBoxPixelScale * 2);
             MenuUi.Place(accent.rectTransform, new Vector2(1, 0), new Vector2(-12, 12), new Vector2(36, 36));
             screen.swatchAccent = accent;
 
             const float labelX = 160f, valueX = 380f;
-            TextMeshProUGUI compName = MenuUi.Text(card, "Blend", "", a.BodyFont, MenuTheme.Body, MenuTheme.Text, TextAlignmentOptions.Left, true);
-            compName.enableWordWrapping = false;
+            TextMeshProUGUI compName = MenuUi.Text(card, "Blend", "", a.BodyFont, MenuTheme.BodySmall, MenuTheme.Text, TextAlignmentOptions.TopLeft, true);
             compName.overflowMode = TextOverflowModes.Ellipsis;
-            MenuUi.TopLeft(compName.rectTransform, labelX, sy, LeftWidth - labelX - MenuTheme.Padding, 36);
+            MenuUi.TopLeft(compName.rectTransform, labelX, sy, LeftWidth - labelX - MenuTheme.Padding, 60);
             screen.compositionName = compName;
-            Label(card, a, "Bulk density", labelX, sy + 40, 200, 32);
-            screen.densityValue = Value(card, a, "", valueX, sy + 40, 300, 32);
-            Label(card, a, "Strength", labelX, sy + 72, 200, 32);
-            screen.strengthValue = Value(card, a, "", valueX, sy + 72, 300, 32);
-            Label(card, a, "Diameter", labelX, sy + 104, 200, 32);
-            screen.diameterValue = Value(card, a, "", valueX, sy + 104, 300, 32);
+            Label(card, a, "Bulk density", labelX, sy + 64, 200, 32);
+            screen.densityValue = Value(card, a, "", valueX, sy + 64, 300, 32);
+            Label(card, a, "Strength", labelX, sy + 96, 200, 32);
+            screen.strengthValue = Value(card, a, "", valueX, sy + 96, 300, 32);
+            Label(card, a, "Diameter", labelX, sy + 128, 200, 32);
+            screen.diameterValue = Value(card, a, "", valueX, sy + 128, 300, 32);
         }
 
         private static void Caption(Transform parent, MenuAssets a, string text, float x, float y, float width,
@@ -662,6 +667,7 @@ namespace MTS.Menus.Editor
                 BoxOutline = AssetDatabase.LoadAssetAtPath<Sprite>(BoxOutlinePath),
                 Background = AssetDatabase.LoadAssetAtPath<Sprite>(BackgroundPath),
             };
+            assets.BodyMaterial = BodyMaterial(assets.BodyFont);
             Debug.Log("[Menus] Art: body font " + assets.BodyFont + ", pixel font " + assets.PixelFont + ", box " + assets.BoxFill +
                       ", outline " + assets.BoxOutline + ", background " + assets.Background);
             if (assets.PixelFont == null || assets.BodyFont == null || assets.BoxFill == null || assets.BoxOutline == null)
@@ -670,6 +676,25 @@ namespace MTS.Menus.Editor
             }
 
             return assets;
+        }
+
+        /// <summary>A copy of the body font's material with a white face colour (kept in sync with the font's atlas).</summary>
+        private static Material BodyMaterial(TMP_FontAsset font)
+        {
+            if (font == null) return null;
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(BodyMaterialPath);
+            if (mat == null)
+            {
+                mat = new Material(font.material) { name = "MenuBody SDF Material" };
+                AssetDatabase.CreateAsset(mat, BodyMaterialPath);
+            }
+
+            mat.shader = font.material.shader;
+            mat.CopyPropertiesFromMaterial(font.material);
+            mat.SetColor("_FaceColor", Color.white);
+            EditorUtility.SetDirty(mat);
+            AssetDatabase.SaveAssetIfDirty(mat);
+            return mat;
         }
 
         private static bool CopyIfMissing(string from, string to)

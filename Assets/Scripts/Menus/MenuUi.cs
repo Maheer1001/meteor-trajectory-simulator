@@ -11,6 +11,9 @@ namespace MTS.Menus
     {
         public TMP_FontAsset BodyFont;
         public TMP_FontAsset PixelFont;
+        /// <summary>Body font material with a plain white face, so text colours show (the shared LiberationSans SDF
+        /// material has an HDR face colour that turns every colour white).</summary>
+        public Material BodyMaterial;
         /// <summary>9-slice pixel rounded box (white, tinted per use).</summary>
         public Sprite BoxFill;
         /// <summary>9-slice pixel rounded outline (white, tinted per use).</summary>

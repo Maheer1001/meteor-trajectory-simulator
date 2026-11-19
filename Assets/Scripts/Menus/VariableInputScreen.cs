@@ -333,6 +333,7 @@ namespace MTS.Menus
             }
 
             addButton.interactable = mixer.CanAdd;
+            MenuUi.SetSelected(addButton, mixer.CanAdd);
             var addRect = (RectTransform)addButton.transform;
             addRect.anchoredPosition = new Vector2(addRect.anchoredPosition.x, -(RowTop + Math.Min(mixer.Count, rows.Length) * RowPitch));
             if (addLabel != null) addLabel.text = mixer.CanAdd ? "+ ADD MATERIAL" : "4 MATERIALS MAX";
