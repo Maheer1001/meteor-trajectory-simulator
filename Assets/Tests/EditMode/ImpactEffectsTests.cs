@@ -105,7 +105,9 @@ namespace MTS.Core.Tests
             Assert.That(fx.HasSeismic, Is.True);
             Assert.That(fx.Magnitude, Is.EqualTo(4.9).Within(0.05));
             Assert.That(fx.HasEjecta, Is.True);
-            Assert.That(fx.EjectaMaxRange, Is.EqualTo(ImpactEffects.FireballRadiusFor(a.Energy)).Within(1));
+            // The fireball (about 470 m) is smaller than the 1.2 km crater, so the continuous blanket (two crater radii) sets the reach.
+            Assert.That(fx.EjectaMaxRange, Is.EqualTo(Math.Max(ImpactEffects.FireballRadiusFor(a.Energy), a.FinalCraterDiameter)).Within(1));
+            Assert.That(fx.Ejecta[0].Radius, Is.GreaterThan(a.FinalCraterDiameter / 2));
             Assert.That(fx.HasTsunami, Is.False);
             Assert.That(fx.Global, Is.EqualTo(GlobalScale.Local));
         }

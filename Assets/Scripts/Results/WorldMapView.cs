@@ -122,8 +122,15 @@ namespace MTS.Results
             content.anchorMin = content.anchorMax = new Vector2(0.5f, 0.5f);
             content.pivot = Vector2.zero;
 
-            map = ResultsUi.Stretch(ResultsUi.Node("Earth", content)).gameObject.AddComponent<RawImage>();
+            // Three copies of the map side by side (the texture repeats in U), so the view can be centred on any
+            // longitude and wraps round seamlessly; ring outlines are drawn on all three copies too.
+            RectTransform earth = ResultsUi.Node("Earth", content);
+            earth.anchorMin = new Vector2(-1, 0);
+            earth.anchorMax = new Vector2(2, 1);
+            earth.offsetMin = earth.offsetMax = Vector2.zero;
+            map = earth.gameObject.AddComponent<RawImage>();
             map.texture = assets.WorldMap;
+            map.uvRect = new Rect(-1, 0, 3, 1);
             map.raycastTarget = false;
             overlay = ResultsUi.Stretch(ResultsUi.Node("Rings", content)).gameObject.AddComponent<UiLines>();
             marker = ResultsUi.Stretch(ResultsUi.Node("Marker", content)).gameObject.AddComponent<UiLines>();
@@ -437,7 +444,7 @@ namespace MTS.Results
             Vector2 size = ContentSize();
             float hx = view.x / (2f * size.x);
             float hy = view.y / (2f * size.y);
-            centre.x = hx >= 0.5f ? 0.5f : Mathf.Clamp(centre.x, hx, 1f - hx);
+            centre.x = Mathf.Repeat(centre.x, 1f); // east-west wraps round (see Build)
             centre.y = hy >= 0.5f ? 0.5f : Mathf.Clamp(centre.y, hy, 1f - hy);
         }
 
@@ -634,8 +641,6 @@ namespace MTS.Results
 
             for (int copy = -1; copy <= 1; copy++)
             {
-                if (copy == -1 && maxX <= size.x && pole == 0) continue;
-                if (copy == 1 && minX >= 0 && pole == 0) continue;
                 var shifted = new List<Vector2>(pts.Count);
                 Vector2 offset = new Vector2(copy * size.x, 0);
                 foreach (Vector2 p in pts) shifted.Add(p + offset);
@@ -688,7 +693,7 @@ namespace MTS.Results
                 {
                     float c = (float)cx + copy * size.x;
                     float h = Mathf.Max(ha, hb);
-                    if (c + h < 0 || c - h > size.x) continue;
+                    if (c + h < -size.x || c - h > 2 * size.x) continue;
                     overlay.Quad(new Vector2(c - ha, ya), new Vector2(c + ha, ya), new Vector2(c + hb, yb), new Vector2(c - hb, yb), fill);
                 }
             }
@@ -705,16 +710,16 @@ namespace MTS.Results
             double lonMax = (centre.x + view.x / (2f * size.x)) * 360.0 - 180.0;
             double latMin = (centre.y - view.y / (2f * size.y)) * 180.0 - 90.0;
             double latMax = (centre.y + view.y / (2f * size.y)) * 180.0 - 90.0;
-            for (double lon = Math.Ceiling(Math.Max(-180, lonMin) / step) * step; lon <= Math.Min(180, lonMax); lon += step)
+            for (double lon = Math.Ceiling(lonMin / step) * step; lon <= lonMax; lon += step)
             {
                 float x = (float)((lon + 180.0) / 360.0) * size.x;
-                overlay.Segment(new Vector2(x, 0), new Vector2(x, size.y), lon == 0 ? 2f : 1.2f, line);
+                overlay.Segment(new Vector2(x, 0), new Vector2(x, size.y), Math.Abs(Geo.WrapDegrees(lon)) < 1e-6 ? 2f : 1.2f, line);
             }
 
             for (double lat = Math.Ceiling(Math.Max(-90, latMin) / step) * step; lat <= Math.Min(90, latMax); lat += step)
             {
                 float y = (float)((lat + 90.0) / 180.0) * size.y;
-                overlay.Segment(new Vector2(0, y), new Vector2(size.x, y), lat == 0 ? 2f : 1.2f, line);
+                overlay.Segment(new Vector2(-size.x, y), new Vector2(2 * size.x, y), lat == 0 ? 2f : 1.2f, line);
             }
         }
 
@@ -723,7 +728,20 @@ namespace MTS.Results
             marker.Clear();
             if (report != null && report.HasLocation)
             {
-                Vector2 p = ToContent(report.Location, ContentSize(), true);
+                Vector2 size = ContentSize();
+                Vector2 p0 = ToContent(report.Location, size, true);
+                for (int copy = -1; copy <= 1; copy++)
+                {
+                    DrawMarkerAt(p0 + new Vector2(copy * size.x, 0), time);
+                }
+            }
+
+            marker.Commit();
+        }
+
+        private void DrawMarkerAt(Vector2 p, float time)
+        {
+            {
                 float phase = (time % PulseSeconds) / PulseSeconds;
                 if (Application.isPlaying)
                 {
@@ -742,8 +760,6 @@ namespace MTS.Results
                 marker.Circle(p, 6.5f, 5f, dark, 20);
                 marker.Circle(p, 6.5f, 2.5f, bright, 20);
             }
-
-            marker.Commit();
         }
 
         private void DrawScaleBar()
@@ -825,7 +841,7 @@ namespace MTS.Results
             closeUp = ResultsUi.Card(root, "CloseUp", assets);
             ResultsUi.Place(closeUp, new Vector2(0, 0), new Vector2(34, 134), new Vector2(400, 420));
             TextMeshProUGUI title = ResultsUi.Heading(closeUp, "CLOSE-UP", assets, 30);
-            ResultsUi.TopBand(title.rectTransform, 16, 30, 22, 22);
+            ResultsUi.TopBand(title.rectTransform, 16, 36, 22, 22);
             TextMeshProUGUI sub = ResultsUi.Text(closeUp, "Sub", "to scale", assets.BodyFont, 20, ResultsTheme.Muted, TextAlignmentOptions.TopRight);
             ResultsUi.TopBand(sub.rectTransform, 22, 26, 22, 22);
 
@@ -852,7 +868,7 @@ namespace MTS.Results
             for (int i = report.Rings.Count - 1; i >= 0; i--)
             {
                 RingRow r = report.Rings[i];
-                if (!r.Reached) continue;
+                if (!r.Reached || r.Radius > 3.0 * outer) continue; // far outside the inset
                 Color col = ResultsTheme.Rings[r.Index % ResultsTheme.Rings.Length];
                 float px = (float)r.Radius * scale;
                 lines.Disc(c, px, col * new Color(1, 1, 1, 0.16f), 72);

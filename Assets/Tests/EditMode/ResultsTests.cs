@@ -264,7 +264,7 @@ namespace MTS.Core.Tests
             object report = Report(r, p);
             Assert.That(Get(report, "Kind").ToString(), Is.EqualTo("GroundImpact").Or.EqualTo("MeteoriteFall"));
             Assert.That(D(report, "Energy"), Is.GreaterThan(0));
-            Assert.That(StatValue(report, "Crater diameter"), Is.Not.Null.And.Not.EqualTo("0"));
+            Assert.That(StatValue(report, "Crater size"), Is.Not.Null.And.Not.EqualTo("0"));
             Assert.That((bool)Get(report, "HasRings"), Is.True);
             Assert.That((bool)Get(report, "HasLocation"), Is.True);
         }
@@ -299,7 +299,7 @@ namespace MTS.Core.Tests
             // Nearly all of the entry kinetic energy (0.5 * 20 kg * (30 km/s)^2 = 9 GJ) goes into the air.
             Assert.That(D(report, "Energy"), Is.InRange(7e9, 9.5e9));
             Assert.That((bool)Get(report, "HasRings"), Is.False);
-            Assert.That(StatValue(report, "Ablated away at"), Is.Not.Null);
+            Assert.That(StatValue(report, "Gone at"), Is.Not.Null);
         }
 
         [Test]

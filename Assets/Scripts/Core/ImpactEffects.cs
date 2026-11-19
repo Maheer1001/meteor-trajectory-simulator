@@ -155,7 +155,7 @@ namespace MTS.Core
         public List<EffectRadius> Seismic { get; } = new List<EffectRadius>();
 
         public bool HasEjecta { get; private set; }
-        /// <summary>Range (m) the rocky ejecta deposit is limited to (the fireball radius below 200 Mt; EIEP).</summary>
+        /// <summary>Range (m) the rocky ejecta deposit is limited to (below 200 Mt the fireball radius, EIEP, or the continuous blanket at two crater radii if larger).</summary>
         public double EjectaMaxRange { get; private set; }
         /// <summary>Ejecta thickness radii: 1 m, 10 cm, 1 cm, 1 mm.</summary>
         public List<EffectRadius> Ejecta { get; } = new List<EffectRadius>();
@@ -279,8 +279,12 @@ namespace MTS.Core
                 return;
             }
 
-            // EIEP limits the deposit to the fireball for impacts below 200 Mt (the ejecta is stopped by the air).
-            EjectaMaxRange = EnergyMegatons < EjectaFireballLimitMegatons ? FireballRadiusFor(Energy) : MaxGroundRange;
+            // EIEP limits the deposit to the fireball for impacts below 200 Mt (the ejecta is stopped by the air), but
+            // never inside the continuous ejecta blanket, which reaches about two crater radii from the centre (EIEP,
+            // after Melosh 1989): for small impacts the fireball radius is smaller than the crater itself.
+            EjectaMaxRange = EnergyMegatons < EjectaFireballLimitMegatons
+                ? Math.Max(FireballRadiusFor(Energy), FinalCraterDiameter)
+                : MaxGroundRange;
             double rim = FinalCraterDiameter / 2.0;
             foreach ((string name, string effect, double t) in new[]
                      {
@@ -445,14 +449,14 @@ namespace MTS.Core
         public static string MercalliDescription(double effectiveMagnitude)
         {
             if (effectiveMagnitude < 1.0) return "Not felt";
-            if (effectiveMagnitude < 3.0) return "Felt by a few people at rest";
-            if (effectiveMagnitude < 4.0) return "Felt indoors; dishes and windows rattle";
-            if (effectiveMagnitude < 5.0) return "Felt by nearly everyone; some windows break";
-            if (effectiveMagnitude < 6.0) return "Heavy furniture moves; weak buildings damaged";
-            if (effectiveMagnitude < 7.0) return "Chimneys and walls fall; ordinary buildings damaged";
-            if (effectiveMagnitude < 8.0) return "Buildings shift off foundations; ground cracks";
-            if (effectiveMagnitude < 9.0) return "Most structures destroyed; rails bent";
-            return "Damage nearly total; objects thrown into the air";
+            if (effectiveMagnitude < 3.0) return "Felt by a few at rest";
+            if (effectiveMagnitude < 4.0) return "Felt indoors; dishes rattle";
+            if (effectiveMagnitude < 5.0) return "Felt by all; windows break";
+            if (effectiveMagnitude < 6.0) return "Weak buildings damaged";
+            if (effectiveMagnitude < 7.0) return "Chimneys and walls fall";
+            if (effectiveMagnitude < 8.0) return "Buildings off foundations";
+            if (effectiveMagnitude < 9.0) return "Most structures destroyed";
+            return "Damage nearly total";
         }
 
         // ------------------------------------------------------------------ ejecta

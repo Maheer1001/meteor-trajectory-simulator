@@ -352,18 +352,17 @@ namespace MTS.Results
                 : ground ? "" : "Nothing reached the ground, so";
 
             // Thermal radiation
-            var thermal = new EffectCard(EffectGroup.Thermal, "HEAT FROM THE FIREBALL") { Applies = fx.HasThermal };
+            var thermal = new EffectCard(EffectGroup.Thermal, "FIREBALL HEAT") { Applies = fx.HasThermal };
             if (fx.HasThermal)
             {
                 double burns = ThermalRadius("Third-degree burns");
-                thermal.Summary = "A fireball " + ResultsFormat.Distance(2 * fx.FireballRadius) + " wide flashes " +
-                                  ResultsFormat.Duration(fx.TimeOfMaxRadiation) + " after impact and burns for " +
-                                  ResultsFormat.Duration(fx.IrradiationDuration) + ".";
-                thermal.Add("Fireball radius", ResultsFormat.Distance(fx.FireballRadius), "everything inside is incinerated");
-                thermal.Add("Clothing ignites", ResultsFormat.Reach(ThermalRadius("Clothing ignites")));
-                thermal.Add("Third-degree burns", ResultsFormat.Reach(burns));
-                thermal.Add("Second-degree burns", ResultsFormat.Reach(ThermalRadius("Second-degree burns")));
-                thermal.Add("Grass and trees ignite", ResultsFormat.Reach(ThermalRadius("Deciduous trees ignite")));
+                thermal.Summary = "Brightest after " + ResultsFormat.ShortDuration(fx.TimeOfMaxRadiation) +
+                                  ", it radiates heat for " + ResultsFormat.ShortDuration(fx.IrradiationDuration) + ".";
+                thermal.Add("Fireball radius", ResultsFormat.Distance(fx.FireballRadius));
+                thermal.Add("Clothing ignites", ResultsFormat.Reach(ThermalRadius("Clothing ignites"), false));
+                thermal.Add("Third-degree burns", ResultsFormat.Reach(burns, false));
+                thermal.Add("Second-degree burns", ResultsFormat.Reach(ThermalRadius("Second-degree burns"), false));
+                thermal.Add("Grass and trees ignite", ResultsFormat.Reach(ThermalRadius("Deciduous trees ignite"), false));
                 EffectRings.Add(new EffectRing(EffectGroup.Thermal, "Fireball", fx.FireballRadius, 0));
                 EffectRings.Add(new EffectRing(EffectGroup.Thermal, "3rd-degree burns", burns, 1));
                 EffectRings.Add(new EffectRing(EffectGroup.Thermal, "Trees ignite", ThermalRadius("Deciduous trees ignite"), 2));
@@ -386,7 +385,7 @@ namespace MTS.Results
                 seismic.Add("Richter magnitude", fx.Magnitude.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
                 foreach (EffectRadius r in fx.Seismic)
                 {
-                    seismic.Add(r.Name + " (" + RomanPart(r.Effect) + ")", r.Radius > 0 ? ResultsFormat.Reach(r.Radius) : "-");
+                    seismic.Add(r.Name + " (" + RomanPart(r.Effect) + ")", r.Radius > 0 ? ResultsFormat.Reach(r.Radius, false) : "-");
                 }
 
                 for (int i = 0; i < fx.Seismic.Count; i++)
@@ -409,9 +408,22 @@ namespace MTS.Results
                 ejecta.Summary = fx.EnergyMegatons < ImpactEffects.EjectaFireballLimitMegatons
                     ? "Rock thrown from the crater; the air stops it within " + ResultsFormat.Distance(fx.EjectaMaxRange) + "."
                     : "Rock thrown from the crater on ballistic arcs, some of it out of the atmosphere.";
+                bool clipped = false;
                 foreach (EffectRadius r in fx.Ejecta)
                 {
-                    ejecta.Add(r.Name, r.Radius > 0 ? ResultsFormat.Reach(r.Radius) : "-");
+                    if (r.Radius >= fx.EjectaMaxRange * 0.999 && fx.EjectaMaxRange < ImpactEffects.MaxGroundRange)
+                    {
+                        clipped = true; // thicker than this all the way to where the deposit stops
+                        continue;
+                    }
+
+                    ejecta.Add(r.Name, r.Radius > 0 ? ResultsFormat.Reach(r.Radius, false) : "-");
+                }
+
+                if (clipped)
+                {
+                    ejecta.Add("Deposit ends at", ResultsFormat.Distance(fx.EjectaMaxRange));
+                    ejecta.Add("Thickness there", ResultsFormat.Distance(ImpactEffects.EjectaThickness(fx.TransientCraterDiameter, fx.EjectaMaxRange)));
                 }
 
                 EffectRings.Add(new EffectRing(EffectGroup.Ejecta, "1 m of debris", fx.Ejecta[0].Radius, 0));
@@ -430,16 +442,15 @@ namespace MTS.Results
             var tsunami = new EffectCard(EffectGroup.Tsunami, "TSUNAMI") { Applies = fx.HasTsunami };
             if (fx.HasTsunami)
             {
-                tsunami.Summary = "It hit the ocean (assumed " + ResultsFormat.Distance(fx.WaterDepth) + " deep): a " +
-                                  ResultsFormat.Distance(fx.WaterCraterDiameter) + " cavity in the water collapses into waves.";
+                tsunami.Summary = "A " + ResultsFormat.Distance(fx.WaterCraterDiameter) + " cavity in the " +
+                                  ResultsFormat.Distance(fx.WaterDepth) + "-deep ocean collapses into waves.";
                 tsunami.Add("Wave at the cavity rim", ResultsFormat.Distance(fx.RimWaveAmplitude));
                 foreach (EffectRadius r in fx.Tsunami)
                 {
-                    tsunami.Add(r.Name + " reaches", r.Radius > 0 ? ResultsFormat.Reach(r.Radius) : "-");
+                    tsunami.Add(r.Name, r.Radius > 0 ? ResultsFormat.Reach(r.Radius, false) : "-");
                 }
 
-                double arrive = ImpactEffects.TsunamiArrival(1e6, fx.WaterDepth);
-                tsunami.Add("Travel time to 1,000 km", ResultsFormat.Duration(arrive));
+                tsunami.Add("Reaches 1,000 km after", ResultsFormat.ShortDuration(ImpactEffects.TsunamiArrival(1e6, fx.WaterDepth)));
                 EffectRings.Add(new EffectRing(EffectGroup.Tsunami, "10 m waves", fx.Tsunami[1].Radius, 0));
                 EffectRings.Add(new EffectRing(EffectGroup.Tsunami, "1 m waves", fx.Tsunami[2].Radius, 1));
             }
@@ -490,7 +501,7 @@ namespace MTS.Results
                     double m = ImpactEffects.EffectiveMagnitude(fx.Magnitude, d);
                     row.Intensity = ImpactEffects.MercalliRange(m);
                     row.Shaking = ImpactEffects.MercalliDescription(m);
-                    if (m >= 1.0) arrivals.Add("shaking " + ResultsFormat.Duration(ImpactEffects.SeismicArrival(d)));
+                    if (m >= 1.0) arrivals.Add("shaking " + ResultsFormat.ShortDuration(ImpactEffects.SeismicArrival(d)));
                 }
 
                 if (fx.HasThermal)
@@ -520,9 +531,9 @@ namespace MTS.Results
                     {
                         row.Debris = ResultsFormat.Distance(t) + " deep";
                         double frag = ImpactEffects.MeanFragmentSize(fx.FinalCraterDiameter, d);
-                        if (!double.IsNaN(frag)) row.Debris += ", " + ResultsFormat.Distance(frag) + " pieces";
+                        if (!double.IsNaN(frag)) row.Debris += ", bits " + ResultsFormat.Distance(frag);
                         double te = ImpactEffects.EjectaArrivalTime(d);
-                        if (!double.IsNaN(te)) arrivals.Add("debris " + ResultsFormat.Duration(te));
+                        if (!double.IsNaN(te)) arrivals.Add("debris " + ResultsFormat.ShortDuration(te));
                     }
                 }
                 else if (fx.HasEjecta)
@@ -534,10 +545,10 @@ namespace MTS.Results
                 {
                     double a = ImpactEffects.TsunamiAmplitude(fx.WaterCraterDiameter, fx.WaterDepth, d);
                     row.Wave = a >= 0.1 ? ResultsFormat.Distance(a) + " wave" : "Under 10 cm";
-                    arrivals.Add("wave " + ResultsFormat.Duration(ImpactEffects.TsunamiArrival(d, fx.WaterDepth)));
+                    arrivals.Add("wave " + ResultsFormat.ShortDuration(ImpactEffects.TsunamiArrival(d, fx.WaterDepth)));
                 }
 
-                row.Arrival = arrivals.Count > 0 ? string.Join(", ", arrivals) : "-";
+                row.Arrival = arrivals.Count > 0 ? string.Join(" · ", arrivals) : "-";
                 DistanceRows.Add(row);
             }
         }
@@ -566,14 +577,14 @@ namespace MTS.Results
                 string type = crater ? (a.IsComplexCrater ? "complex crater" : "simple bowl-shaped crater") : "indicative only (slow impact)";
                 if (IsOcean && crater)
                 {
-                    Stats.Add(new ReportStat("Sea-floor crater", ResultsFormat.Distance(Effects.FinalCraterDiameter),
+                    Stats.Add(new ReportStat("Seabed crater", ResultsFormat.Distance(Effects.FinalCraterDiameter),
                         "under " + ResultsFormat.Distance(Effects.WaterDepth) + " of water (assumed)"));
-                    Stats.Add(new ReportStat("Cavity in the sea", ResultsFormat.Distance(Effects.WaterCraterDiameter),
+                    Stats.Add(new ReportStat("Water cavity", ResultsFormat.Distance(Effects.WaterCraterDiameter),
                         "transient crater in the water"));
                 }
                 else
                 {
-                    Stats.Add(new ReportStat("Crater diameter", ResultsFormat.Distance(a.FinalCraterDiameter),
+                    Stats.Add(new ReportStat("Crater size", ResultsFormat.Distance(a.FinalCraterDiameter),
                         type + ", " + ResultsFormat.Distance(a.FinalCraterDepth) + " deep"));
                 }
 
@@ -606,12 +617,12 @@ namespace MTS.Results
                        " above the ground. No crater formed.";
             GroundZeroOverpressure = Energy > 0 ? ImpactModel.PeakOverpressure(0.0, Energy, burst) : 0.0;
 
-            Stats.Add(new ReportStat("Burst altitude", ResultsFormat.Distance(burst), "fragment cloud reached 7× its break-up width"));
-            Stats.Add(new ReportStat("Energy deposited", ResultsFormat.Tnt(Energy), ResultsFormat.Joules(Energy, true)));
-            Stats.Add(new ReportStat("Break-up altitude", double.IsNaN(r.BreakupAltitude) ? "-" : ResultsFormat.Distance(r.BreakupAltitude),
+            Stats.Add(new ReportStat("Burst altitude", ResultsFormat.Distance(burst), "where the fragment cloud exploded"));
+            Stats.Add(new ReportStat("Energy", ResultsFormat.Tnt(Energy), ResultsFormat.Joules(Energy, true)));
+            Stats.Add(new ReportStat("Break-up at", double.IsNaN(r.BreakupAltitude) ? "-" : ResultsFormat.Distance(r.BreakupAltitude),
                 "air pressure exceeded the body's strength"));
             Stats.Add(new ReportStat("Speed at burst", ResultsFormat.Speed(r.ImpactSpeed), Mach(r.ImpactSpeed, burst)));
-            Stats.Add(new ReportStat("Blast at ground zero", ResultsFormat.Pressure(GroundZeroOverpressure),
+            Stats.Add(new ReportStat("Ground zero", ResultsFormat.Pressure(GroundZeroOverpressure),
                 "peak overpressure, " + ResultsFormat.Psi(GroundZeroOverpressure)));
             Stats.Add(new ReportStat("Path angle", ResultsFormat.Angle(r.ImpactAngleDegrees), "from the horizontal at burst"));
             Stats.Add(new ReportStat("Mass at burst", ResultsFormat.Mass(r.MassAtEnd), MassNote(r.MassAtEnd, p)));
@@ -643,14 +654,14 @@ namespace MTS.Results
             Comparison = ResultsFormat.Comparison(Energy);
             Subtitle = "The meteor vaporised in the upper atmosphere as a bright fireball. Nothing reached the ground.";
 
-            Stats.Add(new ReportStat("Ablated away at", ResultsFormat.Distance(altitude), "too small to track: under 1 kg or 10 cm"));
-            Stats.Add(new ReportStat("Energy deposited", ResultsFormat.Tnt(Energy), ResultsFormat.Joules(Energy, true) + " into the air"));
+            Stats.Add(new ReportStat("Gone at", ResultsFormat.Distance(altitude), "under 1 kg or 10 cm left"));
+            Stats.Add(new ReportStat("Energy", ResultsFormat.Tnt(Energy), ResultsFormat.Joules(Energy, true) + " into the air"));
             Stats.Add(new ReportStat("Mass at entry", ResultsFormat.Mass(entryMass), "when it reached the atmosphere"));
             Stats.Add(new ReportStat("Mass lost", ResultsFormat.Percent(entryMass > 0 ? 1.0 - r.MassAtEnd / entryMass : 1.0),
                 ResultsFormat.Mass(r.MassAtEnd) + " left at the end"));
             Stats.Add(new ReportStat("Entry speed", ResultsFormat.Speed(entrySpeed), "at the 120 km entry interface"));
-            Stats.Add(new ReportStat("Peak temperature", ResultsFormat.Temperature(r.PeakTemperature), "surface layer"));
-            Stats.Add(new ReportStat("Peak deceleration", ResultsFormat.Acceleration(r.PeakDeceleration), "drag only"));
+            Stats.Add(new ReportStat("Peak heat", ResultsFormat.Temperature(r.PeakTemperature), "surface temperature"));
+            Stats.Add(new ReportStat("Peak braking", ResultsFormat.Acceleration(r.PeakDeceleration), "deceleration by drag"));
             Stats.Add(new ReportStat("Flight time", ResultsFormat.Duration(r.EndTime), AtmosphereNote(r)));
             GroundEffects = "No ground effects: the energy was released as light and heat high in the atmosphere.";
         }
@@ -691,7 +702,7 @@ namespace MTS.Results
                 entry.Add("Initial mass", ResultsFormat.Mass(p.Mass));
                 for (int i = 0; i < Composition.Count; i++)
                 {
-                    entry.Add(i == 0 ? "Composition" : "", ResultsFormat.Percent(Composition[i].Fraction) + "  " + Composition[i].Name);
+                    entry.Add(i == 0 ? "Composition" : "", Math.Round(Composition[i].Fraction * 100.0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "%  " + Composition[i].Name);
                 }
 
                 if (p.Material != null)
@@ -712,7 +723,7 @@ namespace MTS.Results
             flight.Add("Peak deceleration", ResultsFormat.Acceleration(r.PeakDeceleration), "drag only");
             SeriesPeaks(r.Series, out double maxQ, out double maxQAltitude, out double maxMach);
             flight.Add("Peak ram pressure", maxQ > 0 ? ResultsFormat.Pressure(maxQ) : "-",
-                maxQ > 0 ? "at " + ResultsFormat.Distance(maxQAltitude) : "");
+                maxQ > 0 ? (maxQAltitude < 1.0 ? "at ground level" : "at " + ResultsFormat.Distance(maxQAltitude)) : "");
             flight.Add("Peak Mach number", maxMach > 0 ? ResultsFormat.Sig(maxMach, 3) : "-");
             flight.Add("Break-up", double.IsNaN(r.BreakupAltitude) ? "Did not break up" : "at " + ResultsFormat.Distance(r.BreakupAltitude),
                 r.BreakupEnergy > 0 ? ResultsFormat.Tnt(r.BreakupEnergy) + " at break-up" : "");

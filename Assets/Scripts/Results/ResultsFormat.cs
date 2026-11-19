@@ -166,11 +166,22 @@ namespace MTS.Results
         /// A ground range that may be planet-sized: "everywhere on Earth" at the antipode limit, "12,000 km (global)"
         /// beyond a quarter of the circumference, otherwise <see cref="Distance"/>.
         /// </summary>
-        public static string Reach(double metres)
+        public static string Reach(double metres, bool annotate = true)
         {
             if (metres >= ImpactModel.MaxGroundRange * 0.999) return "Whole Earth";
-            if (metres >= ImpactEffects.GlobalRange) return Distance(metres) + " (global)";
+            if (annotate && metres >= ImpactEffects.GlobalRange) return Distance(metres) + " (global)";
             return Distance(metres);
+        }
+
+        /// <summary>Compact duration for tables: "2 s", "45 s", "4 min", "1 h 24 min".</summary>
+        public static string ShortDuration(double seconds)
+        {
+            if (double.IsNaN(seconds) || double.IsInfinity(seconds)) return "-";
+            if (seconds < 10.0) return seconds.ToString("0.#", Inv) + " s";
+            if (seconds < 60.0) return Math.Round(seconds).ToString(Inv) + " s";
+            long minutes = (long)Math.Round(seconds / 60.0);
+            if (minutes < 60) return minutes.ToString(Inv) + " min";
+            return (minutes / 60).ToString(Inv) + " h " + (minutes % 60).ToString("00", Inv) + " min";
         }
 
         /// <summary>Length: "350 m", "1.23 km", "12.3 km", "1,234 km".</summary>
@@ -182,6 +193,9 @@ namespace MTS.Results
             }
 
             double a = Math.Abs(metres);
+            if (a == 0) return "0 m";
+            if (a < 1e-3) return Sig(metres * 1e6, 2) + " µm";
+            if (a < 1e-2) return Sig(metres * 1e3, 2) + " mm";
             if (a < 1.0) return Sig(metres * 100.0, 2) + " cm";
             if (a < 1000.0) return Sig(metres, a < 10 ? 2 : 3) + " m";
             if (a < 100000.0) return Sig(metres / 1000.0, 3) + " km";

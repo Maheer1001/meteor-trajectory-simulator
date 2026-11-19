@@ -80,10 +80,24 @@ namespace MTS.Results
             float h = Mathf.Max(30f, vh);
             if (!string.IsNullOrEmpty(note))
             {
-                TextMeshProUGUI n = ResultsUi.Text(card, "Note", note, a.BodyFont, LabelSize, ResultsTheme.Muted * new Color(1, 1, 1, 0.8f), TextAlignmentOptions.TopLeft);
-                float nh = PreferredHeight(n, width);
-                Place(n.rectTransform, left, top + h, width, nh + 2);
-                h += nh;
+                // The note sits beside the label when it fits before the value, otherwise on its own line below.
+                TextMeshProUGUI n = ResultsUi.Text(card, "Note", note, a.BodyFont, LabelSize, ResultsTheme.Muted * new Color(1, 1, 1, 0.75f), TextAlignmentOptions.TopLeft);
+                n.enableWordWrapping = false;
+                float nw = PreferredWidth(n);
+                float valueUsed = Mathf.Min(valueWidth, PreferredWidth(v));
+                float inlineX = left + labelWidth - 8f;
+                if (vh <= 30f && inlineX + nw + 40f <= left + width - valueUsed)
+                {
+                    n.text = "·  " + n.text;
+                    Place(n.rectTransform, inlineX, top + 1, nw + 30, 30);
+                }
+                else
+                {
+                    n.enableWordWrapping = true;
+                    float nh = PreferredHeight(n, width);
+                    Place(n.rectTransform, left, top + h, width, nh + 2);
+                    h += nh;
+                }
             }
 
             return h;
@@ -278,7 +292,6 @@ namespace MTS.Results
                 ResultsUi.Place(tile, new Vector2(0, 1), new Vector2(col * (w + gap), -row * (hgt + gap)), new Vector2(w, hgt));
                 ReportStat s = stats[i];
                 TextMeshProUGUI label = ResultsUi.Text(tile, "Label", s.Label.ToUpperInvariant(), a.BodyFont, LabelSize, ResultsTheme.Label, TextAlignmentOptions.TopLeft, true);
-                label.characterSpacing = 1;
                 label.enableWordWrapping = false;
                 ResultsUi.TopBand(label.rectTransform, 12, 26, 16, 12);
                 TextMeshProUGUI value = ResultsUi.Text(tile, "Value", s.Value, a.BodyFont, 30, ResultsTheme.Text, TextAlignmentOptions.TopLeft, true);
@@ -380,7 +393,8 @@ namespace MTS.Results
             }
 
             bool table = report.DistanceRows.Count > 0;
-            float cardHeight = table ? Mathf.Min(372f, height - y - 300f) : height - y;
+            bool blast = !table && report.Kind == OutcomeKind.Airburst;
+            float cardHeight = table ? Mathf.Min(380f, height - y - 300f - Gap) : blast ? 210f : height - y;
             int n = report.EffectCards.Count;
             float cardWidth = (width - Gap * (n - 1)) / Math.Max(1, n);
             for (int i = 0; i < n; i++)
@@ -394,6 +408,50 @@ namespace MTS.Results
             {
                 RectTransform card = CardAt(root, "DistanceCard", a, 0, y, width, height - y);
                 DistanceTable(card, report, a);
+            }
+            else if (blast)
+            {
+                RectTransform card = CardAt(root, "BlastCard", a, 0, y, width, height - y);
+                AirburstBlast(card, report, a);
+            }
+        }
+
+        /// <summary>For an airburst the blast wave is the whole story on the ground: its reach, in plain words.</summary>
+        private static void AirburstBlast(RectTransform card, OutcomeReport report, ResultsAssets a)
+        {
+            CardHeading(card, "WHAT REACHED THE GROUND: THE BLAST WAVE", a);
+            float y = BelowHeading;
+            y += Paragraph(card, report.GroundEffects + " Peak overpressure right under the burst: " +
+                                 ResultsFormat.Pressure(report.GroundZeroOverpressure) + " (" + ResultsFormat.Psi(report.GroundZeroOverpressure) + ").",
+                a, y, BodySize, ResultsTheme.Text) + 14;
+            // Two columns: the burst on the left, how far its blast reaches on the right.
+            Canvas.ForceUpdateCanvases();
+            float half = (card.rect.width - 2 * Pad - Gap * 2) / 2f;
+            float yl = y, yr = y;
+            TextMeshProUGUI lh = ColumnLabel(card, "THE BURST", a);
+            Place(lh.rectTransform, Pad, yl, half, 26);
+            TextMeshProUGUI rh = ColumnLabel(card, "BLAST REACH ON THE GROUND", a);
+            Place(rh.rectTransform, Pad + half + Gap * 2, yr, half, 26);
+            yl += 36;
+            yr += 36;
+            for (int i = 0; i < report.Stats.Count && i < 6; i++)
+            {
+                ReportStat st = report.Stats[i];
+                yl += KeyValue(card, yl, st.Label, st.Value, st.Note, a, Pad, card.rect.width - Pad - half) + 8;
+            }
+
+            bool any = false;
+            foreach (RingRow r in report.Rings)
+            {
+                if (!r.Reached) continue;
+                any = true;
+                yr += KeyValue(card, yr, r.Effect, ResultsFormat.Reach(r.Radius), ResultsFormat.Psi(r.Overpressure), a,
+                    Pad + half + Gap * 2, Pad, ResultsTheme.Accent) + 8;
+            }
+
+            if (!any)
+            {
+                Paragraph(card, "No damaging overpressure anywhere on the ground.", a, yr, BodySize, ResultsTheme.Muted, Pad + half + Gap * 2, Pad);
             }
         }
 
@@ -442,13 +500,13 @@ namespace MTS.Results
             // Column layout (fractions of the inner width): distance, shaking, heat, debris, wave (ocean), arrival.
             var cols = new List<(string title, float w)>
             {
-                ("DISTANCE", 0.11f),
-                ("SHAKING (MERCALLI)", ocean ? 0.29f : 0.33f),
-                ("HEAT", 0.16f),
-                ("DEBRIS", ocean ? 0.16f : 0.18f),
+                ("DISTANCE", 0.09f),
+                ("SHAKING (MERCALLI)", ocean ? 0.22f : 0.25f),
+                ("HEAT", 0.15f),
+                ("DEBRIS", ocean ? 0.18f : 0.21f),
             };
-            if (ocean) cols.Add(("WAVE", 0.1f));
-            cols.Add(("ARRIVES AFTER", ocean ? 0.18f : 0.22f));
+            if (ocean) cols.Add(("WAVE", 0.09f));
+            cols.Add(("ARRIVES AFTER", ocean ? 0.27f : 0.30f));
 
             float top = BelowHeading - 4;
             float x = Pad;
@@ -707,24 +765,20 @@ namespace MTS.Results
             float width = root.rect.width;
             float height = root.rect.height;
             float columnWidth = (width - Gap * (columns - 1)) / columns;
-            int column = 0;
-            float top = 0;
+            // Each section goes to the column whose content ends highest (a simple masonry layout), in report order.
+            var tops = new float[columns];
             foreach (ReportSection section in report.Details)
             {
-                RectTransform card = CardAt(root, "Section", screen.Assets, column * (columnWidth + Gap), top, columnWidth, 100);
-                float h = Section(card, section, screen.Assets);
-                if (top > 0 && top + h > height && column < columns - 1)
+                int column = 0;
+                for (int c = 1; c < columns; c++)
                 {
-                    column++;
-                    top = 0;
-                    Place(card, column * (columnWidth + Gap), top, columnWidth, h);
-                }
-                else
-                {
-                    card.sizeDelta = new Vector2(columnWidth, h);
+                    if (tops[c] < tops[column] - 0.5f) column = c;
                 }
 
-                top += h + Gap;
+                RectTransform card = CardAt(root, "Section", screen.Assets, column * (columnWidth + Gap), tops[column], columnWidth, 100);
+                float h = Section(card, section, screen.Assets);
+                card.sizeDelta = new Vector2(columnWidth, h);
+                tops[column] += h + Gap;
             }
         }
 

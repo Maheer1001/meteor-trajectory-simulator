@@ -164,7 +164,7 @@ namespace MTS.Results
                 t.fontSharedMaterial = font.material;
             }
 
-            t.text = text;
+            t.text = RichPowers(text);
             t.fontSize = size;
             t.color = color;
             t.alignment = alignment;
@@ -179,6 +179,13 @@ namespace MTS.Results
 
             return t;
         }
+
+        private static readonly System.Text.RegularExpressions.Regex PowerOfTen =
+            new System.Text.RegularExpressions.Regex(@"10\^(-?\d+)");
+
+        /// <summary>Turns plain "10^12" (from the culture-invariant formatters) into a TMP superscript.</summary>
+        public static string RichPowers(string text) =>
+            string.IsNullOrEmpty(text) || text.IndexOf('^') < 0 ? text ?? "" : PowerOfTen.Replace(text, "10<sup>$1</sup>");
 
         /// <summary>
         /// The menu's pixel box: drop shadow, fill and outline (9-slice sprites). Returns the container; content goes
