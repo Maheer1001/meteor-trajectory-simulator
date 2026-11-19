@@ -129,6 +129,7 @@ namespace MTS.Hud
             {
                 Current = null;
                 SimulationClock.Release();
+                SimulationSignals.PublishSafeViewport(new Rect(0f, 0f, 1f, 1f));
             }
         }
 
@@ -166,6 +167,8 @@ namespace MTS.Hud
 
         private void LateUpdate()
         {
+            LayoutToastsAndSafeArea();
+
             // A clicked button stays "selected" and the input module would click it again on Space (Submit),
             // which clashes with the Space shortcut; buttons here never need keyboard focus.
             UnityEngine.EventSystems.EventSystem es = UnityEngine.EventSystems.EventSystem.current;
@@ -245,6 +248,76 @@ namespace MTS.Hud
 
         public bool HudVisible => content == null || content.alpha > 0.5f;
 
+        // ---- Screen space left for the 3D view ----
+
+        private RectTransform flightPanel, sidePanel, stageBar, timeBar, toastArea;
+        private bool layoutFound;
+        private readonly Vector3[] corners = new Vector3[4];
+
+        /// <summary>Gap kept between the HUD panels and the framed subject (px at 1080p).</summary>
+        public const float SafeAreaGap = 12f;
+
+        private void FindLayout()
+        {
+            layoutFound = true;
+            if (content == null) return;
+            Transform c = content.transform;
+            flightPanel = c.Find("FlightPanel") as RectTransform;
+            sidePanel = (c.Find("LaunchPanel") ?? c.Find("WindPanel")) as RectTransform;
+            stageBar = c.Find("StageBar") as RectTransform;
+            timeBar = c.Find("TimeBar") as RectTransform;
+            toastArea = c.Find("Toasts") as RectTransform;
+        }
+
+        /// <summary>
+        /// Keeps the event toasts in the right-hand column under the side panel (out of the view's centre) and publishes
+        /// the screen area between the panels, which the cameras use to frame the meteor.
+        /// </summary>
+        private void LayoutToastsAndSafeArea()
+        {
+            if (!layoutFound) FindLayout();
+            float scale = canvas != null ? canvas.scaleFactor : 1f;
+            float gap = SafeAreaGap * scale;
+
+            if (toastArea != null && sidePanel != null)
+            {
+                sidePanel.GetWorldCorners(corners);
+                toastArea.pivot = new Vector2(1f, 1f);
+                toastArea.sizeDelta = new Vector2(sidePanel.rect.width, toastArea.sizeDelta.y);
+                toastArea.position = corners[3] + Vector3.down * gap;
+            }
+
+            Rect safe = new Rect(0f, 0f, 1f, 1f);
+            float w = Screen.width, h = Screen.height;
+            if (HudVisible && w > 0 && h > 0)
+            {
+                float x0 = 0f, x1 = w, y0 = 0f, y1 = h;
+                if (Corners(flightPanel)) x0 = Mathf.Max(x0, corners[2].x + gap);
+                if (Corners(sidePanel)) x1 = Mathf.Min(x1, corners[0].x - gap);
+                if (Corners(stageBar)) y1 = Mathf.Min(y1, corners[0].y - gap);
+                if (Corners(timeBar)) y0 = Mathf.Max(y0, corners[1].y + gap);
+                if (x1 - x0 > 0.3f * w && y1 - y0 > 0.3f * h)
+                {
+                    safe = new Rect(x0 / w, y0 / h, (x1 - x0) / w, (y1 - y0) / h);
+                }
+            }
+
+            SimulationSignals.PublishSafeViewport(safe);
+        }
+
+        private bool Corners(RectTransform rt)
+        {
+            if (rt == null || !rt.gameObject.activeInHierarchy) return false;
+            rt.GetWorldCorners(corners);
+            if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            {
+                Camera uiCamera = canvas.worldCamera;
+                for (int i = 0; i < 4; i++) corners[i] = RectTransformUtility.WorldToScreenPoint(uiCamera, corners[i]);
+            }
+
+            return true; // in pixels (Screen Space - Overlay world space is already screen pixels)
+        }
+
         private void HandleKeys()
         {
             if (Input.GetKeyDown(KeyCode.Space)) TogglePause();
@@ -259,9 +332,10 @@ namespace MTS.Hud
 
         private void OnCameraChanged(int index, string name)
         {
+            bool changed = index != cameraIndex || (name ?? "") != cameraName;
             cameraName = name ?? "";
             cameraIndex = index;
-            HudToasts.Post("CAMERA " + (index + 1), cameraName, HudTheme.Info);
+            if (changed) HudToasts.Post("CAMERA " + (index + 1), cameraName, HudTheme.Info);
             UpdateLegend();
         }
 

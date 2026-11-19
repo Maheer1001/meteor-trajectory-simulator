@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 /// <summary>
 /// Tiny decoupling hub between the HUD and the visuals, so neither references the other's types.
@@ -18,6 +19,14 @@ public static class SimulationSignals
 
     /// <summary>Camera display names published by the active scene's visuals; empty when it has none.</summary>
     public static string[] CameraNames { get; private set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Part of the screen not covered by the HUD panels, in normalised viewport coordinates (0..1, origin bottom
+    /// left). The visuals frame their subject inside it. The whole screen when there is no HUD or it is hidden.
+    /// </summary>
+    public static Rect SafeViewport { get; private set; } = new Rect(0f, 0f, 1f, 1f);
+
+    public static void PublishSafeViewport(Rect viewport) => SafeViewport = viewport;
 
     public static void RequestCamera(int index) => CameraRequested?.Invoke(index);
 

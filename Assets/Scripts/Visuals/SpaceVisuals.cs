@@ -55,6 +55,8 @@ namespace MTS.Visuals
         {
             SimulationSignals.CameraRequested += OnCameraRequested;
             SimulationSignals.PublishCameras(CameraNames);
+            SafeFrameCamera.Attach(farCamera);
+            SafeFrameCamera.Attach(nearCamera);
         }
 
         private void OnDisable()
@@ -253,7 +255,7 @@ namespace MTS.Visuals
             Vector3 meteorKm = VisualsGlobals.ToVector3((m - camPos) / KmPerUnit);
             marker.position = meteorKm;
             float distKm = meteorKm.magnitude;
-            float pixelSize = 2f * Mathf.Tan(farCamera.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1, farCamera.pixelHeight);
+            float pixelSize = 2f * Mathf.Tan(farCamera.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1f, farCamera.pixelHeight * SafeFrameCamera.HeightFraction);
             marker.localScale = Vector3.one * Mathf.Max(distKm * pixelSize * 34f, 0.001f);
             marker.gameObject.SetActive(distKm > 50f);
             float endDist = (impactMarker.position).magnitude;

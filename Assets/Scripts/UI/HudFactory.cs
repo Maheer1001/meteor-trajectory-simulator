@@ -391,10 +391,11 @@ namespace MTS.Hud
 
         private static ToastFeed BuildToasts(RectTransform parent)
         {
-            const float width = 620f;
+            // Right-hand column under the side panel (SimulationHud keeps it there), clear of the framed view.
+            const float width = SidePanelWidth;
             RectTransform area = Rect("Toasts", parent);
-            Place(area, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -150), new Vector2(width, 0));
-            area.pivot = new Vector2(0.5f, 1);
+            Place(area, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-Margin, -600), new Vector2(width, 0));
+            area.pivot = new Vector2(1, 1);
             Column(area, 8);
             var fitter = area.gameObject.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;

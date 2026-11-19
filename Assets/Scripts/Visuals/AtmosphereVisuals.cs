@@ -81,6 +81,8 @@ namespace MTS.Visuals
         {
             SimulationSignals.CameraRequested += SetMode;
             SimulationSignals.PublishCameras(CameraNames);
+            SafeFrameCamera.Attach(farCamera);
+            SafeFrameCamera.Attach(mainCamera);
             CinemachineCore.CameraUpdatedEvent.AddListener(OnCameraUpdated);
         }
 
