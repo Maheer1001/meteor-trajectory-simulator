@@ -55,17 +55,61 @@ namespace MTS.Visuals
             public float Size;
         }
 
-        public static MeteorVisual Create(VisualsLibrary lib, Transform parent, int layer, bool atmosphere, float radius, int seed)
+        public static MeteorVisual Create(VisualsLibrary lib, Transform parent, int layer, bool atmosphere, float radius, int seed, RockLook look = null)
         {
             var go = new GameObject("Meteor (visual)");
             go.layer = layer;
             go.transform.SetParent(parent, false);
             var mv = go.AddComponent<MeteorVisual>();
-            mv.Build(lib, layer, atmosphere, radius, seed);
+            mv.Build(lib, layer, atmosphere, radius, seed, look);
             return mv;
         }
 
-        private void Build(VisualsLibrary library, int layer, bool inAtmosphere, float radius, int seed)
+        /// <summary>The composition-driven look of the rock.</summary>
+        public RockLook Look { get; private set; }
+
+        /// <summary>World direction "away from the Earth" for the rock's cheap environment reflection.</summary>
+        public Vector3 EnvironmentUp { get; set; } = Vector3.up;
+
+        /// <summary>Look of the body being flown in the current session.</summary>
+        public static RockLook CurrentLook()
+        {
+            SimulationSession s = SimulationSession.Instance;
+            MeteorMaterial flown = s.Properties != null ? s.Properties.Material : (s.Runner != null ? s.Runner.Properties.Material : null);
+            return RockLook.For(s.Composition, flown);
+        }
+
+        private static readonly int LBase = Shader.PropertyToID("_LBase");
+        private static readonly int LAccent = Shader.PropertyToID("_LAccent");
+        private static readonly int LParam = Shader.PropertyToID("_LParam");
+
+        /// <summary>Sends a look's layers to a MeteorRock material.</summary>
+        public static void ApplyLook(Material m, RockLook look)
+        {
+            var bases = new Vector4[RockLook.MaxLayers];
+            var accents = new Vector4[RockLook.MaxLayers];
+            var prms = new Vector4[RockLook.MaxLayers];
+            var styles = Vector4.zero;
+            for (int i = 0; i < RockLook.MaxLayers; i++)
+            {
+                RockLayer l = look.Layers[Mathf.Min(i, look.Layers.Count - 1)];
+                MaterialAppearance a = l.Appearance;
+                bases[i] = new Vector4(a.BaseR, a.BaseG, a.BaseB, 1f);
+                accents[i] = new Vector4(a.AccentR, a.AccentG, a.AccentB, 1f);
+                prms[i] = new Vector4(a.Metallic, a.Roughness, a.Inclusions, a.Ice);
+                styles[i] = (float)l.Style;
+            }
+
+            float[] e = look.Edges();
+            m.SetVectorArray(LBase, bases);
+            m.SetVectorArray(LAccent, accents);
+            m.SetVectorArray(LParam, prms);
+            m.SetVector("_LayerStyles", styles);
+            m.SetVector("_LayerEdges", new Vector4(e[0], e[1], e[2], 0f));
+            m.SetFloat("_LayerCount", look.Layers.Count);
+        }
+
+        private void Build(VisualsLibrary library, int layer, bool inAtmosphere, float radius, int seed, RockLook look)
         {
             lib = library;
             atmosphere = inAtmosphere;
@@ -75,10 +119,12 @@ namespace MTS.Visuals
             tumbleAxis = new Vector3((float)rng.NextDouble() - 0.5f, (float)rng.NextDouble() - 0.5f, (float)rng.NextDouble() - 0.5f).normalized;
             tumbleSpeed = 4f + (float)rng.NextDouble() * 8f;
 
+            Look = look ?? CurrentLook();
             rock = NewChild("Rock", layer).transform;
-            rock.gameObject.AddComponent<MeshFilter>().sharedMesh = ProceduralMeshes.Rock(seed, 5);
+            rock.gameObject.AddComponent<MeshFilter>().sharedMesh = ProceduralMeshes.Rock(seed, 5, 0.22f, null, Look.Lumpiness);
             var rr = rock.gameObject.AddComponent<MeshRenderer>();
             rockMat = new Material(lib.meteorRock);
+            ApplyLook(rockMat, Look);
             rr.sharedMaterial = rockMat;
             rock.localRotation = Random.rotation;
             rock.localScale = Vector3.one * Radius;
@@ -92,7 +138,14 @@ namespace MTS.Visuals
 
             if (!atmosphere)
             {
-                glow.gameObject.SetActive(false);
+                // icy bodies sublimate in sunlight: a faint vapour coma around the nucleus
+                float ice = Look.Ice;
+                glow.gameObject.SetActive(ice > 0.15f);
+                glow.localScale = Vector3.one * Radius * 9f;
+                glowMat.SetColor("_Color", new Color(0.55f, 0.75f, 1f));
+                glowMat.SetFloat("_Intensity", 0.09f + ice * 0.12f);
+                glowMat.SetFloat("_Core", 600f);
+                glowMat.SetFloat("_Halo", 3.2f);
                 return;
             }
 
@@ -154,6 +207,7 @@ namespace MTS.Visuals
             rockMat.SetFloat("_HeatIntensity", heat * 2.2f);
             rockMat.SetFloat("_Char", Mathf.Clamp01(heat * 1.5f));
             rockMat.SetVector("_FlowDir", rock.InverseTransformDirection(lastVelocityDir));
+            rockMat.SetVector("_EnvUp", rock.InverseTransformDirection(EnvironmentUp));
 
             if (!atmosphere)
             {
@@ -179,7 +233,8 @@ namespace MTS.Visuals
             // Halo: a few body sizes, but never thinner than a few pixels' worth at the viewing distance (a distant
             // fireball still reads as a bright point) and never larger than a fraction of the view.
             float cam = Mathf.Max(CameraDistance, 1f);
-            float glowSize = Mathf.Max(sheath * (broken ? 3f + 5f * b : 5f + 14f * b), cam * 0.03f * b) * (1f + flash * 1.2f);
+            // (and at least ~1.5 degrees across once it glows at all, so a distant fireball never vanishes)
+            float glowSize = Mathf.Max(sheath * (broken ? 3f + 5f * b : 5f + 14f * b) / (1f + Mathf.Log10(1f + Radius / 50f)), cam * Mathf.Max(0.03f * b, b > 0.02f ? 0.026f : 0f)) * (1f + flash * 1.2f);
             glowSize = Mathf.Min(glowSize, cam * 0.9f);
             glow.gameObject.SetActive(b > 0.01f || flash > 0.01f);
             glow.localScale = Vector3.one * glowSize;
@@ -194,7 +249,8 @@ namespace MTS.Visuals
             trail.emitting = b > 0.03f;
             trail.widthMultiplier = Mathf.Max((broken ? Radius * 2f : sheath) * (0.6f + b * 1.2f), cam * 0.002f * b);
             trail.minVertexDistance = Mathf.Max(Radius, speed * 0.004f);
-            trail.time = 0.8f + b * 1.6f;
+            // a city-sized body leaves a train hundreds of km long
+            trail.time = (0.8f + b * 1.6f) * (1f + Mathf.Log10(1f + Radius / 10f));
             trailMat.SetColor("_Color", Color.white * (0.55f + b * 0.55f));
 
             float mlr = (float)t.MassLossRate;

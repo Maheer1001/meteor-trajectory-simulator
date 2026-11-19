@@ -25,15 +25,15 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _BumpStrength: 0.6
+    - _BumpStrength: 1
     - _Char: 0
     - _HeatIntensity: 0
-    - _Metallic: 0.15
+    - _LayerCount: 1
     - _NoiseScale: 2.5
-    - _Smoothness: 0.25
     m_Colors:
-    - _Albedo: {r: 0.46, g: 0.42, b: 0.38, a: 1}
-    - _Albedo2: {r: 0.24, g: 0.21, b: 0.19, a: 1}
+    - _EnvUp: {r: 0, g: 1, b: 0, a: 0}
     - _FlowDir: {r: 0, g: 0, b: 1, a: 0}
     - _HeatColor: {r: 1, g: 0.4, b: 0.1, a: 1}
+    - _LayerEdges: {r: 1, g: 1, b: 1, a: 0}
+    - _LayerStyles: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []

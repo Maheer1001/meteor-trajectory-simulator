@@ -39,7 +39,7 @@ Shader "MTS/Crater"
             {
                 v2f o;
                 o.pos = UnityObjectToClipPos(v.vertex);
-                o.p = v.vertex.xz * 2.5; // mesh radius = 2.5 crater radii
+                o.p = v.texcoord.xy * 2.5; // mesh radius = 2.5 crater radii (unit-disc UV)
                 return o;
             }
 
@@ -48,7 +48,8 @@ Shader "MTS/Crater"
                 float r = length(i.p);
                 float ang = atan2(i.p.y, i.p.x);
                 float n = MTS_Fbm(float3(i.p * 3.0, 0), 4);
-                float rays = pow(saturate(MTS_Noise3(float3(ang * 9.0, 0, 0)) * 1.3 - 0.2), 2.0);
+                float2 dir = i.p / max(r, 1e-5);
+                float rays = pow(saturate(MTS_Noise3(float3(dir * 1.5, 0)) * 1.3 - 0.2), 2.0);
                 float rimR = 1.0 + (n - 0.5) * 0.12;
                 float bowl = 1.0 - smoothstep(rimR * 0.82, rimR * 0.98, r);
                 float rim = exp(-pow((r - rimR) / 0.12, 2.0));

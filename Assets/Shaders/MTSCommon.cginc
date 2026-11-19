@@ -12,6 +12,7 @@ float4 _MTS_SunColor;      // rgb: sunlight colour, a: intensity
 float  _MTS_EarthRotation; // radians the Earth has turned since t = 0 (omega * t)
 float  _MTS_CloudRotation; // extra cloud drift (radians)
 float4 _MTS_Flash;         // rgb: flash colour * intensity, a: unused
+float  _MTS_Ash;           // 0..1: dust and ash darkening the sky after a large impact
 float4 _MTS_FlashPos;      // xyz: flash world position, w: radius of influence (m)
 
 float MTS_Hash13(float3 p)
@@ -127,6 +128,10 @@ float3 MTS_SkyColor(float3 dir, float3 sun, float camAlt)
     {
         result = lerp(result, horizon * day * 0.85, saturate(-e * 8.0) * airAmount);
     }
+
+    // dust and ash from a large impact: a dim, brownish sky
+    float lum = dot(result, float3(0.3, 0.5, 0.2));
+    result = lerp(result, lum * float3(0.62, 0.48, 0.38) * 0.45, saturate(_MTS_Ash));
 
     return result;
 }

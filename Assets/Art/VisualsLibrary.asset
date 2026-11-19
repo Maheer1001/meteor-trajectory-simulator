@@ -31,6 +31,10 @@ MonoBehaviour:
   shockwave: {fileID: 2100000, guid: c713695dc8c9f9143b9c1b0d468ff629, type: 2}
   crater: {fileID: 2100000, guid: e06074c99679e9c4b94e2cf874f01532, type: 2}
   dust: {fileID: 2100000, guid: c1979422176443a4098323682423a013, type: 2}
+  fireball: {fileID: 2100000, guid: 255a23468f71e164b80f123f98bc8a03, type: 2}
+  ejecta: {fileID: 2100000, guid: 5df1671199473cc4b8e5acbf3acf4c94, type: 2}
+  ashCloud: {fileID: 2100000, guid: f8327450293bd1a4b8c251daa389fe2a, type: 2}
+  groundScar: {fileID: 2100000, guid: 99fe9599901fe7c4ca4d017842930d27, type: 2}
   spaceProfile: {fileID: 11400000, guid: e644f795be07aa444b31a09a359af9de, type: 2}
   atmosphereProfile: {fileID: 11400000, guid: a612741f3d2c7a0468ddcaaf2af8d5e9, type: 2}
   flashProfile: {fileID: 11400000, guid: f4dad91cce626c240b6603cdc4805501, type: 2}

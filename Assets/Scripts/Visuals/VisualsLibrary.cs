@@ -37,6 +37,10 @@ namespace MTS.Visuals
         public Material shockwave;
         public Material crater;
         public Material dust;
+        public Material fireball;
+        public Material ejecta;
+        public Material ashCloud;
+        public Material groundScar;
 
         [Header("Post-processing")]
         public PostProcessProfile spaceProfile;

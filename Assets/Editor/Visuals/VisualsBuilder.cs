@@ -116,6 +116,10 @@ namespace MTS.Visuals.EditorTools
             });
             lib.shockwave = Mat("Shockwave", "MTS/Shockwave", null);
             lib.crater = Mat("Crater", "MTS/Crater", null);
+            lib.fireball = Mat("Fireball", "MTS/Fireball", null);
+            lib.ejecta = Mat("Ejecta", "MTS/DustSheet", null);
+            lib.ashCloud = Mat("AshCloud", "MTS/AshCloud", null);
+            lib.groundScar = Mat("GroundScar", "MTS/GroundScar", null);
 
             lib.spaceProfile = Profile("SpaceProfile", bloom: 2.2f, threshold: 1.0f, exposure: 0.15f, vignette: 0.32f, motionBlur: false);
             lib.atmosphereProfile = Profile("AtmosphereProfile", bloom: 2.8f, threshold: 1.05f, exposure: 0.1f, vignette: 0.26f, motionBlur: false);
