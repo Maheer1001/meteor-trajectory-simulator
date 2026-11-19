@@ -84,6 +84,7 @@ namespace MTS.Hud
         private double rateWindowSimStart;
         private double achievedRate = double.NaN;
         private string cameraName = "";
+        private int cameraIndex = -1;
 
         public TimeWarpLadder Ladder => ladder;
 
@@ -216,8 +217,8 @@ namespace MTS.Hud
             HudToasts.Clear();
             SimulationSession session = SimulationSession.Instance;
             HudToasts.Post("LAUNCH", session.Mode == EntryMode.Inbound
-                ? "Realistic entry: " + UnitFormat.Speed(session.EntrySpeed) + " at " + UnitFormat.Angle(session.EntryAngleDegrees)
-                : "Classic NEA: released from rest", HudTheme.Launch);
+                ? "Inbound entry at " + UnitFormat.Speed(session.EntrySpeed) + ", " + UnitFormat.Angle(session.EntryAngleDegrees) + " below horizontal"
+                : "From rest: falling under gravity", HudTheme.Launch);
             if (launchPanel != null) launchPanel.SetExpanded(false);
             RefreshAll();
         }
@@ -259,6 +260,7 @@ namespace MTS.Hud
         private void OnCameraChanged(int index, string name)
         {
             cameraName = name ?? "";
+            cameraIndex = index;
             HudToasts.Post("CAMERA " + (index + 1), cameraName, HudTheme.Info);
             UpdateLegend();
         }
@@ -321,21 +323,31 @@ namespace MTS.Hud
                 if (stage == HudStage.Space && SimulationClock.HoldForLaunch)
                 {
                     // Before launch, describe what the launch will use (the session settings).
-                    string next = session.Mode == EntryMode.Inbound
-                        ? "Realistic " + UnitFormat.Speed(session.EntrySpeed) + " @ " + UnitFormat.Angle(session.EntryAngleDegrees)
-                        : "Classic NEA";
-                    modeValue.text = "Next launch: " + next + "  |  " +
-                                     (session.MaterialPreset != null ? session.MaterialPreset.Name : "Custom (from inputs)");
+                    Set(modeValue, "Next: " + RunSummary(session.Mode, session.EntrySpeed, session.EntryAngleDegrees,
+                        LaunchPanel.InputMass, LaunchPanel.ShortComposition(session.Composition)));
                 }
                 else
                 {
                     MeteorProperties p = runner?.Properties;
-                    string mode = p == null ? "" : p.Mode == EntryMode.Inbound
-                        ? "Realistic " + UnitFormat.Speed(p.EntrySpeed) + " @ " + UnitFormat.Angle(p.EntryAngleDegrees)
-                        : "Classic NEA";
-                    modeValue.text = p == null ? "" : mode + "  |  " + p.Material.Name;
+                    Set(modeValue, p == null ? "" : RunSummary(p.Mode, p.EntrySpeed, p.EntryAngleDegrees, p.Mass, MaterialSummary(session, p.Material)));
                 }
             }
+        }
+
+        /// <summary>One line for the stage bar, e.g. "Inbound entry 20.00 km/s at 60°  |  1,250 Gt Carbonaceous chondrite".</summary>
+        public static string RunSummary(EntryMode mode, double entrySpeed, double entryAngle, double mass, string material)
+        {
+            string m = mode == EntryMode.Inbound
+                ? LaunchPanel.ModeName(mode) + " " + UnitFormat.Speed(entrySpeed) + " at " + UnitFormat.Angle(entryAngle)
+                : LaunchPanel.ModeName(mode);
+            return m + "   |   " + UnitFormat.Mass(mass) + " " + material;
+        }
+
+        private static string MaterialSummary(SimulationSession session, MeteorMaterial material)
+        {
+            if (material == null) return "";
+            if (session.Composition != null && ReferenceEquals(session.Composition.Material, material)) return LaunchPanel.ShortComposition(session.Composition);
+            return material.Name.Contains(" + ") ? "mixed composition" : LaunchPanel.ShortName(material);
         }
 
         private void RefreshFlightData(SimulationRunner runner)
@@ -372,15 +384,15 @@ namespace MTS.Hud
             Set(decelerationValue, UnitFormat.GForce(t.DecelerationG));
             Set(temperatureValue, UnitFormat.Temperature(t.Temperature));
             double startMass = HudRunTracker.StartMass > 0 ? HudRunTracker.StartMass : t.Mass;
-            Set(massValue, UnitFormat.Mass(t.Mass) + "  (" + UnitFormat.Percent(startMass > 0 ? t.Mass / startMass : 1.0) + ")");
+            Set(massValue, UnitFormat.Mass(t.Mass) + Secondary(UnitFormat.Percent(startMass > 0 ? t.Mass / startMass : 1.0)));
             Set(massLossValue, UnitFormat.MassRate(t.MassLossRate));
             Set(brightnessValue, t.AbsoluteMagnitude >= FlightTelemetry.DarkMagnitude
                 ? "not glowing"
-                : UnitFormat.Power(t.Luminosity) + "  " + UnitFormat.Magnitude(t.AbsoluteMagnitude));
+                : UnitFormat.Power(t.Luminosity) + Secondary(UnitFormat.Magnitude(t.AbsoluteMagnitude)));
             Set(diameterValue, UnitFormat.Length(t.Diameter));
             if (structureValue != null)
             {
-                structureValue.text = t.Broken ? "BROKEN - fragment cloud" : "Intact";
+                structureValue.text = t.Broken ? "Broken: fragment cloud" : "Intact";
                 structureValue.color = t.Broken ? HudTheme.Warning : HudTheme.Value;
             }
         }
@@ -433,19 +445,36 @@ namespace MTS.Hud
         private void UpdateLegend()
         {
             if (legendText == null) return;
-            // Camera names come from the active scene's visuals and vary in length: shrink to fit the bar.
+            // Camera names come from the active scene's visuals and vary in length: shrink to fit the bar only as a
+            // last resort. The active camera is shown in white instead of repeating its name.
             legendText.enableWordWrapping = false;
             legendText.enableAutoSizing = true;
-            legendText.fontSizeMax = 17;
-            legendText.fontSizeMin = 10;
+            legendText.fontSizeMax = HudTheme.LegendSize;
+            legendText.fontSizeMin = 16;
             string[] names = SimulationSignals.CameraNames;
-            string cams = names != null && names.Length > 0
-                ? string.Join("  ", System.Linq.Enumerable.Select(System.Linq.Enumerable.Take(names, 3), (n, i) => (i + 1) + " " + n))
-                : "1-3 cameras";
+            string cams;
+            if (names != null && names.Length > 0)
+            {
+                var parts = new System.Collections.Generic.List<string>();
+                for (int i = 0; i < names.Length && i < 3; i++)
+                {
+                    bool active = i == cameraIndex || (cameraIndex < 0 && cameraName.Length > 0 && names[i] == cameraName);
+                    parts.Add(active ? "<color=#FFFFFF><b>" + (i + 1) + "</b> " + names[i] + "</color>" : "<b>" + (i + 1) + "</b> " + names[i]);
+                }
+
+                cams = string.Join("  ", parts);
+            }
+            else
+            {
+                cams = "<b>1-3</b> cameras";
+            }
+
             legendText.text = "<b>SPACE</b> " + (stage == HudStage.Space ? "launch / pause" : "pause") +
-                              "   <b>+ / -</b> time warp   <b>" + cams + "</b>   <b>H</b> hide HUD   <b>ESC</b> menu" +
-                              (cameraName.Length > 0 ? "   |  camera: " + cameraName : "");
+                              "    <b>+ / -</b> time warp    " + cams + "    <b>H</b> hide HUD    <b>ESC</b> menu";
         }
+
+        /// <summary>Smaller, dimmer trailing part of a value ("1,250 Gt  97.3 %").</summary>
+        private static string Secondary(string text) => "  <size=80%><color=#FFC9C0>" + text + "</color></size>";
 
         private static void Set(TMP_Text text, string value)
         {

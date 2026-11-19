@@ -2,6 +2,7 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using MTS.Core;
+using MTS.Core.Display;
 using MTS.Hud;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -128,48 +129,80 @@ namespace MTS.Hud.Editor
             SimulationHud hud = SimulationHud.Current;
             Debug.Log("[HUD] Space HUD attached; hold for launch = " + SimulationClock.HoldForLaunch +
                       "; legacy canvas enabled = " + LegacyCanvasEnabled());
-            yield return Capture(output, "space-prelaunch-classic");
+            yield return Capture(output, "space-prelaunch-from-rest");
 
+            // Inbound entry with a three-material composition, as if set on the input screen.
+            SimulationSession session = SimulationSession.Instance;
+            session.Composition = MeteorComposition.Create(new[]
+            {
+                (MeteorMaterialPresets.IronId, 60.0), (MeteorMaterialPresets.OrdinaryChondriteId, 30.0), (MeteorMaterialPresets.CometaryId, 10.0),
+            });
+            MassRangeInput.Mass = 2.5e6f;
             hud.launchPanel.SetMode(EntryMode.Inbound);
-            hud.launchPanel.SelectMaterial(MeteorMaterialPresets.All.Count + 1); // two-material mix
             hud.RefreshAll();
             yield return Frames(5);
-            yield return Capture(output, "space-prelaunch-realistic-mix");
+            yield return Capture(output, "space-prelaunch-inbound");
 
             // --- Space in flight
-            hud.launchPanel.SelectMaterial(1); // ordinary chondrite
+            session.Composition = MeteorComposition.Default;
+            MassRangeInput.Mass = 30000f;
             hud.Launch();
             hud.Ladder.SetNearest(500);
             SimulationSignals.RaiseToast("Signal toast from another system");
             yield return Frames(90);
             hud.RefreshAll();
-            Debug.Log("[HUD] Space flight: t = " + SimulationSession.Instance.Runner.State.Time + " s, alt = " +
-                      SimulationSession.Instance.Runner.State.Altitude + " m, capped ticks = " + SimulationClock.CappedTicks);
+            Debug.Log("[HUD] Space flight: t = " + session.Runner.State.Time + " s, alt = " +
+                      session.Runner.State.Altitude + " m, capped ticks = " + SimulationClock.CappedTicks);
             yield return Capture(output, "space-flight");
 
             // --- Atmosphere in flight: start just above the entry interface and fast-forward to an eventful moment.
             var start = new Vec3d(PhysicalConstants.EarthRadius + 125000.0, 0, 0);
             MeteorProperties props = MeteorProperties.Create(20000, MeteorMaterialPresets.OrdinaryChondrite, 0.5, start,
                 EntryMode.Inbound, 19000, 40);
-            SimulationRunner runner = SimulationSession.Instance.Begin(props);
+            SimulationRunner runner = session.Begin(props);
             while (!runner.HasEnded && !runner.State.Broken)
             {
                 runner.Advance(0.05);
             }
 
+            yield return AtmosphereCapture(output, "atmosphere-flight", runner, null);
+
+            // --- Catastrophe scale: Chicxulub (10 km, 1.25e15 kg) at 30 km altitude, plus the impact toast it will raise.
+            ImpactScenario chicxulub = ImpactScenarios.Chicxulub;
+            chicxulub.ApplyTo(session);
+            MassRangeInput.Mass = (float)chicxulub.Mass;
+            props = MeteorProperties.Create(chicxulub.Mass, chicxulub.Composition.Material, 0.5, start,
+                EntryMode.Inbound, chicxulub.EntrySpeed, chicxulub.EntryAngleDegrees);
+            SimulationRunner huge = session.Begin(props);
+            while (!huge.HasEnded && huge.State.Altitude > 30000)
+            {
+                huge.Advance(0.05);
+            }
+
+            yield return AtmosphereCapture(output, "atmosphere-chicxulub", huge,
+                () => HudToasts.Post("IMPACT", FlightEventDetector.ImpactMessage(huge.State.Mass, huge.State.Speed), HudTheme.Danger));
+        }
+
+        private static IEnumerator AtmosphereCapture(string output, string name, SimulationRunner runner, System.Action beforeCapture)
+        {
+            SimulationSession.Instance.IsPaused = false;
+            Time.timeScale = 1f;
             HudRunTracker.Track(runner);
+            SimulationHud previous = SimulationHud.Current;
             SceneManager.LoadScene(HudBootstrap.AtmosphereScene);
-            while (SimulationHud.Current == null || SimulationHud.Current.stage != HudStage.Atmosphere) yield return null;
-            hud = SimulationHud.Current;
+            while (SimulationHud.Current == null || SimulationHud.Current == previous || SimulationHud.Current.stage != HudStage.Atmosphere) yield return null;
+            SimulationHud hud = SimulationHud.Current;
             hud.Ladder.SetNearest(0.1);
             hud.windCompass.Apply(40, 0.3);
             yield return Frames(20);
             SimulationSession.Instance.IsPaused = true; // freeze for consistent captures
             Time.timeScale = 0f;
+            beforeCapture?.Invoke();
             hud.RefreshAll();
+            yield return Frames(3);
             Debug.Log("[HUD] Atmosphere HUD attached; legacy canvas enabled = " + LegacyCanvasEnabled() + "; alt = " +
                       runner.State.Altitude + " m; ended = " + runner.HasEnded);
-            yield return Capture(output, "atmosphere-flight");
+            yield return Capture(output, name);
         }
 
         private static bool LegacyCanvasEnabled()

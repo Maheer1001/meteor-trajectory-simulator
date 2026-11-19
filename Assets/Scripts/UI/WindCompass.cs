@@ -84,13 +84,13 @@ namespace MTS.Hud
             {
                 if (speed <= 0)
                 {
-                    readout.text = "Calm (no wind)";
+                    readout.text = "Calm";
                 }
                 else
                 {
                     double bearing = WindCompassMath.BearingTowards(fraction);
-                    readout.text = UnitFormat.Speed(speed) + " towards " + bearing.ToString("000", System.Globalization.CultureInfo.InvariantCulture) +
-                                   "° (" + WindCompassMath.CardinalName(bearing) + ")";
+                    readout.text = UnitFormat.Speed(speed) + " to " + bearing.ToString("000", System.Globalization.CultureInfo.InvariantCulture) +
+                                   "° " + WindCompassMath.CardinalName(bearing);
                 }
             }
         }
