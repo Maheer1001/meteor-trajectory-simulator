@@ -21,17 +21,15 @@ This document describes the physics in `Assets/Scripts/Core` (assembly `MTS.Core
 - **End reasons** (`SimulationResult.Reason`):
   - `Impact`: reached `h = 0`. The state is linearly interpolated to the surface within the last step.
   - `Airburst`: the fragment cloud spread to `L >= f_p L0` with `f_p = 7`.
-  - `Disintegrated`: ablated away (`m <= 1 kg` or equivalent radius `<= 0.1 m`, the NEA's thresholds).
+  - `Disintegrated`: ablated away (`m <= 1 kg` or equivalent radius `<= 0.1 m`, the original thresholds).
   - `Error`: a non-finite value appeared.
   - `Timeout`: more than 30 simulated days.
 
 ## 2. Start modes
 
-- **Classic NEA** (default): released from rest at `r0 = (X, Y, Z) x 4050 km` (the input screen's coordinate unit), exactly as in the original design. It now falls along the true radial line and accelerates under the central field.
-- **Realistic entry**: same start point, but on an inbound two-body (Keplerian) path chosen so it reaches the entry interface (120 km) at a set speed and flight-path angle. The defaults are 17 km/s and 45 degrees, the EIEP defaults. Energy and angular momentum give the starting speed `v0^2 = ve^2 - 2 mu (1/re - 1/r0)` and angle `cos(gamma0) = re ve cos(gamma) / (r0 v0)`. The tangential direction is local east. If the requested entry cannot be reached from that start point, the meteor falls from rest and a warning is logged.
-- **Switching modes**, until a toggle is added to the screens, has two options:
-  - the `realisticEntryMode` / `entrySpeed` / `entryAngleDegrees` fields on the space-scene `Meteor_Force` component;
-  - the command-line arguments `-mtsMode realistic`, `-mtsEntrySpeed 17000` and `-mtsEntryAngle 45`.
+- **From rest**: released at rest at `r0 = (X, Y, Z) x 4050 km` (the setup screen's coordinate unit). It falls along the radial line and accelerates under the central field.
+- **Inbound entry**: same start point, but on an inbound two-body (Keplerian) path chosen so it reaches the entry interface (120 km) at a set speed and flight-path angle. The defaults are 17 km/s and 45 degrees, the EIEP defaults. Energy and angular momentum give the starting speed `v0^2 = ve^2 - 2 mu (1/re - 1/r0)` and angle `cos(gamma0) = re ve cos(gamma) / (r0 v0)`. The tangential direction is local east. If the requested entry cannot be reached from that start point, the meteor falls from rest and a warning is logged.
+- **Choosing the mode**: on the setup screen or the Space stage's launch panel, or with `-mtsMode rest|inbound`, `-mtsEntrySpeed 17000` and `-mtsEntryAngle 45` on the command line. `-mtsScenario <id>` loads a scenario.
 - **Stages.** The space stage runs until `h <= 120 km` (entry interface). The atmosphere stage runs from there until an end event. One physics model covers both stages; the stage only decides which screen is shown.
 
 ## 3. Atmosphere: U.S. Standard Atmosphere 1976
@@ -70,7 +68,7 @@ Meteors fly hypersonically for most of their path, so the old subsonic Reynolds-
 
 ### Cross-section
 
-- **Intact body:** `A = S_f pi r^2`. Here `r = (3m / (4 pi rho_i))^(1/3)` is the equal-volume radius, and the shape factor `S_f = 1 + 0.24 SCF` maps the input screen's shape-complexity factor from a sphere (0) to a cube's average cross-section (1).
+- **Intact body:** `A = S_f pi r^2`. Here `r = (3m / (4 pi rho_i))^(1/3)` is the equal-volume radius, and the shape factor `S_f = 1 + 0.24 SCF` maps a shape-complexity factor from a sphere (0) to a cube's average cross-section (1). Runs from the setup screen use SCF = 0.5 (`MeteorProperties.DefaultScf`).
 - **Broken body:** `A = pi L^2 / 4`, where `L` is the pancake diameter.
 
 ### Heating
@@ -102,25 +100,22 @@ m_h c dT/dt = P_in - P_rad,  m_h = min(m, rho_i S delta),  delta = 1 cm
 
 ### Material
 
-`MeteorMaterial` holds everything about composition. By default a "custom" material is built from the inputs (density, SHC, SCF), and the parameters the user does not enter are chosen by density:
+`MeteorMaterial` holds everything about the material. Runs are built from a **composition** (`MeteorComposition`) of one to four of the eight built-in materials by mass fraction; it replaces the old density, specific-heat and surface-condition inputs. Rounded representative bulk values (densities: Britt and Consolmagno 2003, Macke et al. 2011; strengths: Popova et al. 2011; Q* and T_abl as used in fireball modelling, Ceplecha and ReVelle 2005; cometary values after Borovicka 2006):
 
-| | Stony (< 6000 kg/m^3) | Iron (>= 6000 kg/m^3) |
-| --- | ---: | ---: |
-| Q* (heat of ablation) | 8 MJ/kg | 6 MJ/kg |
-| T_abl | 2000 K | 1811 K (melting point of iron) |
-| Lambda | 0.1 | 0.1 |
-| Strength Y_i | EIEP Eq. 9 (below) | EIEP Eq. 9 (below) |
-
-**Presets** (`MeteorMaterialPresets`, chosen in the Space stage's launch panel; a preset replaces the density and SHC inputs). Rounded representative bulk values (densities: Britt and Consolmagno 2003; strengths: Popova et al. 2011; Q* and T_abl as used in fireball modelling, Ceplecha and ReVelle 2005):
-
-| Preset | rho (kg/m^3) | c (J/(kg K)) | Q* (MJ/kg) | T_abl (K) | epsilon | Y_i (Pa) |
+| Material | rho (kg/m^3) | c (J/(kg K)) | Q* (MJ/kg) | T_abl (K) | epsilon | Y_i (Pa) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Stony (ordinary chondrite) | 3300 | 750 | 8 | 2000 | 0.90 | 1e6 |
 | Carbonaceous chondrite | 2200 | 900 | 5 | 1700 | 0.95 | 2e5 |
+| Enstatite chondrite | 3600 | 700 | 8 | 2000 | 0.88 | 2e6 |
+| Basaltic achondrite (HED) | 3000 | 800 | 8 | 1900 | 0.90 | 5e6 |
 | Stony-iron (pallasite) | 4800 | 600 | 7 | 1900 | 0.85 | 1e7 |
 | Iron (Fe-Ni) | 7800 | 450 | 6 | 1811 | 0.80 | 5e7 |
+| Cometary (ice and dust) | 600 | 1800 | 2.5 | 800 | 0.90 | 1e4 |
+| Rubble pile (porous aggregate) | 1900 | 750 | 8 | 2000 | 0.90 | 1e3 |
 
-**Composition mix** (`MeteorMaterialPresets.Mix`, by mass fraction `w_i`): density by volume `1/rho = sum w_i / rho_i`; c, Q*, T_abl, epsilon and Lambda as mass-weighted means; strength as the weighted geometric mean `exp(sum w_i ln Y_i)`.
+Each material also carries display-only appearance data (matrix and inclusion colours, metal, roughness, inclusions, porosity, ice) that the visuals use to texture the rock; the physics never reads it. `MeteorMaterial.CreateCustom` (density, SHC, SCF with stony or iron defaults) is kept for tests and tools.
+
+**Composition mix** (`MeteorComposition` / `MeteorMaterialPresets.Mix`, by mass fraction `w_i`, at most four parts): density by volume `1/rho = sum w_i / rho_i`; c, Q*, T_abl, epsilon and Lambda as mass-weighted means; strength as the weighted geometric mean `exp(sum w_i ln Y_i)`.
 
 ### Flight telemetry (display only)
 
@@ -171,6 +166,27 @@ m_h c dT/dt = P_in - P_rad,  m_h = min(m, rho_i S delta),  delta = 1 cm
   Chelyabinsk (about 500 kt at about 30 km) now gives about 1.6 kPa at ground zero and the 0.04 psi (window damage) ring at about 117 km, close to the observed window breakage up to about 120 km (Brown et al. 2013; Popova et al. 2013). Tunguska-like low bursts are unchanged below the burst. Because refraction and absorption are ignored, the outer (weakest) rings of mid-altitude bursts are larger than with the EIEP fit alone (1 Mt at 8 km: 0.04 psi ring 105 km to 251 km), so treat those outer radii as upper estimates.
 - **Old model.** The old code computed an "explosive energy" from a drag power divided by a hard-coded wind speed. Its rings were thousands of km across (about 23 000 km for 0.04 psi), and its crater formula was not dimensionally consistent.
 
+### Scenarios
+
+`ImpactScenarios` (setup screen buttons) and what the model gives from start coordinates (2, 2, 2), inbound:
+
+| Scenario | Mass, material, entry | Model result |
+| --- | --- | --- |
+| Chelyabinsk 2013 | 1.2e7 kg stony, 19 km/s at 18 deg | ~516 kt airburst at ~26 km |
+| Tunguska 1908 | 3.5e8 kg stony, 15 km/s at 45 deg | ~9.5 Mt airburst |
+| Meteor Crater (Barringer) | 5.1e8 kg iron, 12.8 km/s at 45 deg | ~5 Mt impact, 1.3 km crater (real: 1.2 km) |
+| 1 km asteroid | 1.7e12 kg stony, 20 km/s at 45 deg | ~80 Gt, 16 km crater |
+| Chicxulub | 1.25e15 kg carbonaceous, 20 km/s at 60 deg | ~60 Tt, ~117 km crater (real: ~180 km) |
+
+### Further effects (`ImpactEffects`, Collins, Melosh and Marcus 2005)
+
+- **Thermal radiation** (impacts faster than about 15 km/s): fireball radius `R_f = 0.002 E^(1/3)` m (Eq. 32), time of maximum radiation (Eq. 33), thermal exposure with distance including the fraction of the fireball above the horizon (Eqs. 34-37), radiation duration (Eq. 35), and radii for clothing, plywood, grass, newspaper and tree ignition and first- to third-degree burns (Table 1 thresholds scaled with energy, Eq. 39).
+- **Seismic shaking:** Richter magnitude `M = 0.67 log10(E) - 5.87` (Eq. 40), effective magnitude with distance (Eqs. 41a-c; the far-field form takes the angular distance in radians so it joins Eq. 41b at 700 km), arrival time (Eq. 42) and Modified Mercalli intensity, giving felt, damaging and destructive radii.
+- **Ejecta:** blanket thickness with distance (Eq. 47), mean fragment size (Eq. 53) and arrival time (Eqs. 49-52).
+- **Ocean impacts:** a 1-degree land/ocean mask generated from the results map decides whether the impact point is at sea (coasts are good to about 100 km; small islands are lost). The ocean is taken as 4 km deep everywhere. The impactor is slowed by the water layer (Eq. 65) and opens a water cavity. EIEP has no tsunami model, so the wave is this project's assumption: the initial amplitude is the cavity rim height, capped at the water depth, decaying as 1/r (after Ward and Asphaug 2000). Treat the tsunami heights as rough.
+- **Global summary by energy:** local, regional, continental, global climate shock, global catastrophe and mass extinction (from 5e7 Mt), after Toon et al. (1997) and Chapman and Morrison (1994), plus EIEP's verdicts on changes to Earth's orbit and spin (Table 5).
+- **Planet-sized radii:** the blast-radius search is capped at the antipode (`ImpactModel.MaxGroundRange`); radii past a quarter of the circumference are labelled global.
+
 ## 7. Impact location
 
 The end position is rotated into the Earth-fixed frame using the elapsed time and Earth's sidereal rate (`7.2921159e-5 rad/s`, prime meridian on `+X` at `t = 0`). Then `lat = asin(Ze / |r|)` and `lon = wrap(atan2(Ye, Xe) - omega t)`, both in degrees. The location is reverse-geocoded with geocode.maps.co: culture-invariant URL, `UnityWebRequest`, cancelled when the scene unloads. The results map (`MapProjection` in `Assets/Scripts/Results`) is an equirectangular texture with an explicit, unit-tested lat/lon to map-position function. Damage rings are geodesic: each ring point is the destination point at the ring's ground range along bearings 0-360 degrees on a spherical Earth, so rings show the correct 1/cos(latitude) east-west stretch, and pole and antimeridian crossings are handled.
@@ -204,6 +220,11 @@ The end position is rotated into the Earth-fixed frame using the elapsed time an
 - Popova O. P. et al. (2013). Chelyabinsk airburst, damage assessment, meteorite recovery, and characterization. *Science* 342, 1069-1073.
 - Popova O. et al. (2011). Very low strengths of interplanetary meteoroids and small asteroids. *Meteoritics & Planetary Science* 46(10), 1525-1550.
 - Britt D. T., Consolmagno G. J. (2003). Stony meteorite porosities and densities. *Meteoritics & Planetary Science* 38(8), 1161-1180.
+- Macke R. J., Consolmagno G. J., Britt D. T. (2011). Density, porosity and magnetic susceptibility of carbonaceous chondrites. *Meteoritics & Planetary Science* 46(12), 1842-1862.
+- Borovicka J. (2006). Physical and chemical properties of meteoroids as deduced from observations. *Proc. IAU Symposium* 229, 249-271.
+- Toon O. B. et al. (1997). Environmental perturbations caused by the impacts of asteroids and comets. *Reviews of Geophysics* 35(1), 41-78.
+- Chapman C. R., Morrison D. (1994). Impacts on the Earth by asteroids and comets: assessing the hazard. *Nature* 367, 33-40.
+- Ward S. N., Asphaug E. (2000). Asteroid impact tsunami: a probabilistic hazard assessment. *Icarus* 145, 64-78.
 - Ceplecha Z., ReVelle D. O. (2005). Fragmentation model of meteoroid motion, mass loss, and radiation in the atmosphere. *Meteoritics & Planetary Science* 40(1), 35-54.
 - Pierce A. D. (1989). *Acoustics: An Introduction to Its Physical Principles and Applications*. Acoustical Society of America.
 - Hoerner S. F. (1965). *Fluid-Dynamic Drag*. Bailey A. B., Hiatt J. (1972). Sphere drag coefficients for a broad range of Mach and Reynolds numbers. *AIAA Journal* 10(11).

@@ -1,8 +1,8 @@
 # Meteor Trajectory Simulator
 
-![Demo: setting up a stony meteoroid, flying past a true-scale Earth, a glowing atmospheric entry with break-up and airburst, then the results summary, damage-ring map and flight charts](media/demo.gif)
+![Demo: loading the Chicxulub scenario, a 10 km carbonaceous asteroid flying past a true-scale Earth, its fiery entry, the impact fireball and shock rings, then the results, effects and damage-ring map](media/demo.gif)
 
-A Unity simulation of a meteor falling towards Earth. You set the meteor's properties and starting position, then watch it fall through space, enter the atmosphere, and either burn up, explode in the air or hit the ground. The simulator then estimates the energy, crater and blast radii and shows where on Earth it happened.
+A Unity simulation of a meteor falling towards Earth, from a house-sized fireball to the dinosaur killer. You pick a famous impact or design your own (mass and a mix of up to four materials), then watch it fall through space, enter the atmosphere, and either burn up, explode in the air or hit the ground. The simulator then estimates the energy, crater, blast, heat, earthquake, debris and tsunami effects and shows where on Earth it happened.
 
 **Quick start (Windows):** install Unity 2022.3.7f1, then double-click **`run.bat`**. See [Open & run](#open--run).
 
@@ -12,9 +12,10 @@ A Unity simulation of a meteor falling towards Earth. You set the meteor's prope
 
 The physics is in a separate, unit-tested C# library (`Assets/Scripts/Core`); [docs/PHYSICS.md](docs/PHYSICS.md) gives the equations, units, assumptions and references.
 
+- **Setup:** famous scenarios (Chelyabinsk 2013, Tunguska 1908, Meteor Crater, a 1 km asteroid, Chicxulub) or a custom meteoroid: mass from 1 t to 10,000 Gt and a composition of up to four of eight materials (ordinary, carbonaceous and enstatite chondrites, basaltic achondrite, stony-iron, iron, cometary ice and dust, rubble pile) that sets its density, heat capacity, ablation, strength and look.
 - **Space stage:** 3-D motion under Earth's central gravity, integrated with **4th-order Runge-Kutta (RK4)** at a fixed step size. Two start modes:
-  - **Classic NEA** (default): released from rest at the chosen coordinates.
-  - **Realistic entry:** an inbound path that reaches the atmosphere at 17 km/s and 45° by default.
+  - **From rest:** released at rest at the chosen coordinates and falls under gravity.
+  - **Inbound entry:** an inbound path that reaches the atmosphere at a chosen speed (11-72 km/s) and angle.
 - **Atmosphere stage** (from 120 km altitude):
   - Air temperature, pressure and density from the **U.S. Standard Atmosphere 1976**
   - Drag from the velocity relative to the (wind-blown) air, with a drag coefficient that depends on Mach and Knudsen number
@@ -22,37 +23,35 @@ The physics is in a separate, unit-tested C# library (`Assets/Scripts/Core`); [d
   - **Fragmentation and airburst** using the "pancake" model from the Earth Impact Effects Program (EIEP): break-up when ram pressure exceeds the material strength
   - Wind speed and direction set with a drag-to-aim wind compass
   - The run ends in a ground impact, an airburst, or the meteor ablating away; every outcome goes to the results screen
-- **Results screen** (tabs: Summary, Map, Charts, Physics):
-  - Energy in kt/Mt TNT compared with Hiroshima, Chelyabinsk and Tunguska; crater size (transient and final, simple or complex) and blast radii for nine overpressure levels from Collins, Melosh & Marcus (2005), plus a point-source model so high airbursts such as Chelyabinsk still reach the ground
+- **Results screen** (tabs: Summary, Map, Effects, Charts, Physics):
+  - Energy in kt to Tt of TNT compared with Hiroshima, Chelyabinsk, Tunguska, Meteor Crater and Chicxulub, with a severity rating from local to mass extinction
+  - Crater size and blast radii for nine overpressure levels from the Earth Impact Effects Program (Collins, Melosh & Marcus 2005), plus a point-source model so high airbursts such as Chelyabinsk still reach the ground
+  - **Effects:** fireball heat and burn/ignition radii, earthquake magnitude and shaking by distance, ejecta thickness and arrival times, and for ocean impacts the water cavity and tsunami heights
   - Dedicated airburst and burned-up outcomes (burst altitude, energy deposited, ground overpressure)
-  - Geodesic damage rings on a pannable, zoomable world map with legend and scale bar; the end position is converted to latitude/longitude (allowing for Earth's rotation) and reverse-geocoded to a place name or ocean
+  - Geodesic damage rings (blast, heat, shaking, debris, tsunami; toggleable) on a pannable, zoomable world map that handles planet-sized effects; the end point is converted to latitude/longitude (allowing for Earth's rotation) and reverse-geocoded to a place name or ocean
   - Charts with axes and units: altitude-time, speed-altitude, mass-altitude, temperature-time
+- **Graphics:** a true-scale Earth (NASA Blue and Black Marble), a procedural rock textured by its composition, plasma, ablation sparks and ionisation trail, Cinemachine cameras, and an end sequence scaled to the event: from a small crater up to a global fireball, ejecta curtain, ash and shock rings seen from orbit
 
 ## Inputs and controls
 
-- **Variable input screen:**
-  - mass: 5,000 to 60,000 kg
-  - density: 1,000 to 8,000 kg/m³
-  - specific heat capacity: 400 to 1,500 J/(kg·K)
-  - surface condition factor: 0 to 1
-  - X/Y/Z starting coordinates: -50 to -1 or 1 to 50 (one unit is 4,050 km)
-
-  Values outside a range are clamped. Blank fields use mid-range defaults. Either `.` or `,` works as the decimal mark.
-- **Launch panel** (Space stage, before launch): Classic NEA or Realistic entry (entry speed 11-72 km/s, angle 5-90°), and the material: custom (from the inputs), one of four presets (stony, carbonaceous, stony-iron, iron) or a two-material mix. The command-line arguments `-mtsMode realistic`, `-mtsEntrySpeed 17000` and `-mtsEntryAngle 45` still work.
+- **Setup screen:** a scenario (or Custom), the composition mixer (up to four materials with amounts; the shares always total 100%), mass (type `60000`, `1.2e7` or `12 kt`, or use the log slider; 1 t to 10,000 Gt), the start mode with entry speed and angle, and the X/Y/Z start coordinates (-50 to -1 or 1 to 50 each; one unit is 4,050 km). Values are kept when you come back to the screen.
+- **Launch panel** (Space stage, before launch): From rest or Inbound entry with speed and angle, and a read-only summary of the meteoroid. The command-line arguments `-mtsMode rest|inbound`, `-mtsEntrySpeed 17000`, `-mtsEntryAngle 45` and `-mtsScenario chelyabinsk|tunguska|barringer|one-km|chicxulub` also work.
 - **HUD:** altitude, speed, Mach, ram pressure, g-load, surface temperature, mass, ablation rate, brightness (absolute magnitude), stage indicator and event pop-ups (entry, break-up, airburst, impact). Hover any readout for a tooltip.
 - **Keys:** Space = launch / pause / play, `+` / `-` = time warp (shown as real ×N; the step size stays fixed, a faster warp takes more steps per frame), `1`-`3` = cameras, `H` = hide HUD, `Esc` = menu.
-- **Results:** `1`-`4` switch tabs; on the map drag to pan and scroll to zoom.
-- The main menu has Start, Continue, Restart, Exit, and a More Information screen that links to background reading (RK4, drag coefficients, overpressure levels).
+- **Results:** `1`-`5` switch tabs; on the map drag to pan, scroll to zoom and click the legend to show or hide layers.
+- The main menu and the pause menu (Esc) have a More Information page: what it does, the stages, the physics in plain words with links to background reading, the controls and credits.
 
 ## Screenshots
 
-| Launch settings and HUD | Atmospheric entry |
+| Setup | Launch settings and HUD |
 | --- | --- |
-| ![Space stage with the flight-data HUD and launch settings over a true-scale Earth](media/screenshot-launch.png) | ![Chase camera on a glowing fireball with its ionisation trail](media/screenshot-fireball.png) |
-| **Results summary** | **Damage-ring map** |
-| ![Airburst results: energy compared with Hiroshima, Chelyabinsk and Tunguska, and the blast table](media/screenshot-results.png) | ![World map with geodesic damage rings, legend and scale bar](media/screenshot-map.png) |
-
-The original NEA input screen is kept as it was: ![Variable input screen](media/screenshot-input.png)
+| ![Setup screen with the Chicxulub scenario selected, the composition mixer, mass and start settings](media/screenshot-setup.png) | ![Space stage with the flight-data HUD and the launch panel over a true-scale Earth](media/screenshot-launch.png) |
+| **Atmospheric entry** | **Impact** |
+| ![A 10 km asteroid entering the atmosphere](media/screenshot-fireball.png) | ![Impact fireball and shock rings](media/screenshot-impact.png) |
+| **Results summary** | **Effects** |
+| ![Results: 59.9 Tt TNT ground impact rated mass extinction, with comparisons and the blast table](media/screenshot-results.png) | ![Effects tab: fireball heat, ground shaking, falling debris, tsunami and a table by distance](media/screenshot-effects.png) |
+| **Damage-ring map** | |
+| ![World map with geodesic damage rings and toggleable layers](media/screenshot-map.png) | |
 
 ## Open & run
 
@@ -80,9 +79,9 @@ Scene order: `MainMenu` → `VariableInput` → `SpaceSimulation` → `Atmospher
 
 ### How to play
 
-1. **Main menu → Start**, then enter the meteor's mass, density, specific heat capacity, surface condition factor and X/Y/Z start position, and press **Commence Simulation**.
-2. In space, pick the start mode (Classic NEA or Realistic entry with speed and angle) and a material in **Launch settings**, then press **Launch** (or Space).
-3. Use `+` / `-` for time warp, `1`-`3` for cameras and the wind compass in the atmosphere. The run ends in an impact, an airburst or the meteor burning up, then the results screen opens (tabs `1`-`4`).
+1. **Main menu → Start**, then pick a scenario or set the mass, mix up to four materials, choose From rest or Inbound entry and the X/Y/Z start position, and press **Commence Simulation**.
+2. In space, check the start mode in **Launch settings** (you can still switch From rest / Inbound entry and change speed and angle), then press **Launch** (or Space).
+3. Use `+` / `-` for time warp, `1`-`3` for cameras and the wind compass in the atmosphere. The run ends in an impact, an airburst or the meteor burning up, then the results screen opens (tabs `1`-`5`).
 
 ### Making a Windows build by hand
 
@@ -138,7 +137,9 @@ Assets/Scripts/Session/      Glue between the input screen and the simulation se
 Assets/Scripts/Space/        Space-stage adapter (Meteor_Force.cs)
 Assets/Scripts/Atmosphere/   Atmosphere-stage adapter (AtmosphereForce.cs)
 Assets/Scripts/UI/           Runtime HUD: flight data, launch panel, time warp, wind compass, toasts
-Assets/Scripts/Results/      Results screen: summary, geodesic map rings, charts, geocoding (MTS.Results)
+Assets/Scripts/Results/      Results screen: summary, effects, geodesic map rings, charts, geocoding (MTS.Results)
+Assets/Scripts/Menus/        Main menu, pause menu and setup screen (composition mixer, scenarios)
+Assets/Scripts/Visuals/      Earth, meteor, cameras and end sequence
 Assets/Editor/               Launcher (build / play entry points), HUD and results builders, screenshot tools
 Assets/Scripts/Inputs/       Range-checked user inputs
 Assets/Scripts/Main menu/    Scene navigation and info links
