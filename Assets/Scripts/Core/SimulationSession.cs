@@ -16,6 +16,11 @@ namespace MTS.Core
         public EntryMode Mode { get; set; } = EntryMode.ClassicNea;
         public double EntrySpeed { get; set; } = MeteorProperties.DefaultEntrySpeed;
         public double EntryAngleDegrees { get; set; } = MeteorProperties.DefaultEntryAngleDegrees;
+        /// <summary>
+        /// Material preset or composition mix for new runs (see <see cref="MeteorMaterialPresets"/>); null means
+        /// "custom": build the material from the input screen's density, SHC and SCF. Kept across <see cref="Reset"/>.
+        /// </summary>
+        public MeteorMaterial MaterialPreset { get; set; }
 
         public MeteorProperties Properties { get; private set; }
         public SimulationRunner Runner { get; private set; }

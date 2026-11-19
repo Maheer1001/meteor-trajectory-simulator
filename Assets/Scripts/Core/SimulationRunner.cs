@@ -63,6 +63,8 @@ namespace MTS.Core
         private double breakupEnergy;
         private double entryTime = double.NaN;
         private double entrySpeed = double.NaN;
+        private double lastMassLossRate;
+        private double lastDeceleration;
 
         public SimulationRunner(MeteorProperties properties, double windSpeed = 0.0, double windAzimuthFraction = 0.0)
         {
@@ -110,6 +112,29 @@ namespace MTS.Core
         public Vec3d CurrentAcceleration => Derivative(state.Time, Kinematics(state)).Velocity;
 
         public double CurrentGravity => Gravity.Magnitude(state.Position.Magnitude);
+
+        /// <summary>Derived quantities of the current state for display (Mach, ram pressure, luminosity, ...).</summary>
+        public FlightTelemetry Telemetry
+        {
+            get
+            {
+                double altitude = state.Altitude;
+                double airSpeed = state.Speed;
+                double mach = 0, q = 0, rho = 0;
+                if (altitude < VacuumAltitude)
+                {
+                    AtmosphereSample air = Atmosphere.Sample(Math.Max(0.0, altitude));
+                    airSpeed = (state.Velocity - WindAt(state.Position, altitude)).Magnitude;
+                    rho = air.Density;
+                    q = 0.5 * rho * airSpeed * airSpeed;
+                    mach = air.SpeedOfSound > 0 ? airSpeed / air.SpeedOfSound : 0;
+                }
+
+                return new FlightTelemetry(Stage, state.Time, altitude, state.Speed, airSpeed, mach, q,
+                    lastDeceleration / PhysicalConstants.StandardGravity, state.Mass, lastMassLossRate,
+                    state.Temperature, state.Broken, FlowDiameter(state), rho);
+            }
+        }
 
         /// <summary>
         /// Advances by simSeconds of simulated time using fixed sub-steps. Leftover time smaller than one step is
@@ -216,6 +241,8 @@ namespace MTS.Core
             Vec3d gMid = Gravity.Acceleration((prev.Position + next.Position) * 0.5);
             double decel = ((next.Velocity - prev.Velocity) / dt - gMid).Magnitude;
             peakDeceleration = Math.Max(peakDeceleration, decel);
+            lastDeceleration = decel;
+            lastMassLossRate = 0.0;
 
             double altitude = state.Altitude;
 
@@ -229,6 +256,7 @@ namespace MTS.Core
                 HeatingStep h = Heating.Step(mat, state.Mass, state.Temperature, CrossSection(state), air.Density, speed, envT, dt);
                 state.Temperature = h.Temperature;
                 state.Mass = Math.Max(0.0, state.Mass - h.MassLost);
+                lastMassLossRate = (prev.Mass - state.Mass) / dt;
 
                 // Aerodynamic break-up: ram pressure rho v^2 exceeds the bulk strength (Collins et al. 2005, Eq. 10)
                 if (Properties.EnableFragmentation && !state.Broken && air.Density * speed * speed >= mat.Strength)

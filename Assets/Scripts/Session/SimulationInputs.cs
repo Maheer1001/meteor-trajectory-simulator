@@ -18,7 +18,8 @@ public static class SimulationInputs
     {
         MeteorProperties properties = MeteorProperties.FromInputs(
             MassRangeInput.Mass, DensityRangeInput.Density, SHCRangeInput.SHC, SCFRangeInput.SCF,
-            Xcord.X, Ycord.Y, Zcord.Z, session.Mode, session.EntrySpeed, session.EntryAngleDegrees);
+            Xcord.X, Ycord.Y, Zcord.Z, session.Mode, session.EntrySpeed, session.EntryAngleDegrees,
+            preset: session.MaterialPreset);
 
         if (properties.Substitutions.Count > 0)
         {

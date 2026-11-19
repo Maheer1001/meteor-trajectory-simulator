@@ -67,14 +67,15 @@ namespace MTS.Core
         public static MeteorProperties FromInputs(double mass, double density, double specificHeat, double scf,
             double x, double y, double z, EntryMode mode = EntryMode.ClassicNea,
             double entrySpeed = DefaultEntrySpeed, double entryAngleDegrees = DefaultEntryAngleDegrees,
-            bool enableFragmentation = true)
+            bool enableFragmentation = true, MeteorMaterial preset = null)
         {
             var p = new MeteorProperties();
             p.Mass = p.Positive(mass, DefaultMass, "mass");
             double rho = p.Positive(density, DefaultDensity, "density");
             double c = p.Positive(specificHeat, DefaultSpecificHeat, "SHC");
             p.Scf = p.InRange(scf, 0.0, 1.0, DefaultScf, "SCF");
-            p.Material = MeteorMaterial.CreateCustom(rho, c, p.Scf);
+            // A material preset (or composition mix) replaces the density/SHC inputs entirely.
+            p.Material = preset ?? MeteorMaterial.CreateCustom(rho, c, p.Scf);
             p.StartPosition = new Vec3d(p.Coordinate(x, "X"), p.Coordinate(y, "Y"), p.Coordinate(z, "Z")) * MetresPerCoordinateUnit;
             p.Mode = mode;
             p.EntrySpeed = p.Positive(entrySpeed, DefaultEntrySpeed, "entry speed");
