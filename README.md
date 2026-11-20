@@ -1,6 +1,6 @@
 # Meteor Trajectory Simulator
 
-![A 10 km asteroid (the Chicxulub scenario) passes a true-scale Earth, burns through the atmosphere and strikes: a planet-scale fireball and shock rings seen from orbit](media/hero-chicxulub.gif)
+![Using the simulator: mixing iron and stone and typing a mass on the setup screen, launching an inbound entry, switching cameras and time warp, dragging the wind compass, hiding the HUD for the impact, then the Effects tab and toggling map layers](media/demo.gif)
 
 A Unity simulation of a meteor falling towards Earth, from a house-sized fireball to the dinosaur killer. You pick a famous impact or design your own (mass and a mix of up to four materials), then watch it fall through space, enter the atmosphere, and either burn up, explode in the air or hit the ground. The simulator then estimates the energy, crater, blast, heat, earthquake, debris and tsunami effects and shows where on Earth it happened.
 
@@ -41,13 +41,13 @@ The physics is in a separate, unit-tested C# library (`Assets/Scripts/Core`); [d
 - **Results:** `1`-`5` switch tabs; on the map drag to pan, scroll to zoom and click the legend to show or hide layers.
 - The main menu and the pause menu (Esc) have a More Information page: what it does, the stages, the physics in plain words with links to background reading, the controls and credits.
 
-## Walkthrough
+## Cinematics
 
-![Walkthrough: picking the Chicxulub scenario on the setup screen, launching with the HUD, the entry and impact, then the results, effects and damage-ring map](media/demo.gif)
+| Chicxulub: a 10 km asteroid | Tunguska 1908: a stony airburst |
+| --- | --- |
+| ![A 10 km asteroid passes a true-scale Earth, burns through the atmosphere and strikes: a planet-scale fireball and shock rings seen from orbit](media/hero-chicxulub.gif) | ![A 60 m stony body streaks in, bursts in the air and leaves a flattened-forest scar and blast rings](media/hero-tunguska.gif) |
 
-| Tunguska 1908: a stony airburst over the ocean |
-| --- |
-| ![The Tunguska scenario: a 60 m stony body streaks in, bursts in the air and leaves a flattened-forest scar and blast rings](media/hero-tunguska.gif) |
+Recorded with the HUD hidden (press H).
 
 ## Screenshots
 
