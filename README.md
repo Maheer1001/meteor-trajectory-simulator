@@ -151,16 +151,49 @@ Assets/Scripts/Visuals/      Earth, meteor, cameras and end sequence
 Assets/Editor/               Launcher (build / play entry points), HUD and results builders, screenshot tools
 Assets/Scripts/Inputs/       Range-checked user inputs
 Assets/Scripts/Main menu/    Scene navigation and info links
-Assets/Tests/EditMode/       Unit tests (physics, HUD formatting and controls, results maths)
+Assets/Tests/EditMode/       Unit tests (physics, HUD formatting and controls, results maths) and SetupChecks/
 Assets/Scenes/               The six scenes
 docs/PHYSICS.md              The physics model, equations and references
 run.bat, run.ps1              One-click build-and-play entry point (Windows)
+run-tests.bat, run-tests.ps1  One-command test run with a pass/fail summary (see Testing)
 ```
 
-## Running the tests
+## Testing
 
-In the Unity Editor, open **Window → General → Test Runner** and run the **EditMode** tests. Or run them from the command line (without `-quit`):
+The tests are the quickest way to confirm a fresh clone is set up and everything is hooked together.
+
+**You need:** Unity **2022.3.7f1** (the version in `ProjectSettings/ProjectVersion.txt`, Built-in render pipeline) with a licence activated. No API key is needed: the geocoding key is optional (without it the results screen shows coordinates instead of place names).
+
+**One command** (Windows; close the Unity Editor on this project first, as Unity will not open a project twice):
 
 ```powershell
-& "C:\Program Files\Unity 2022.3.7f1\Editor\Unity.exe" -batchmode -nographics -projectPath . -runTests -testPlatform EditMode -testResults results.xml -logFile test.log
+.
+un-tests.ps1                       # or double-click run-tests.bat
+.
+un-tests.ps1 -Filter SetupChecks   # only the setup checks
 ```
+
+It runs every EditMode test in batch mode and prints each failure, per-assembly counts and a PASSED/FAILED line; the exit code is 0 when everything passes. The first run imports the project and takes several minutes. It finds Unity in the usual Hub and standalone install folders; set `UNITY_EDITOR` to `Unity.exe` if yours is elsewhere.
+
+**Results** go to `TestResults/` (gitignored): `editmode-results.xml` (NUnit 3 XML, readable by most CI tools) and `editmode.log` (the Unity log; search it for `error CS` if no results were written).
+
+In the editor you can also open **Window → General → Test Runner** and run the **EditMode** tab.
+
+### What the tests cover
+
+| Assembly | What it checks |
+| --- | --- |
+| `MTS.Core.Tests` | Physics and logic in `MTS.Core`: atmosphere, gravity, drag, heating, fragmentation, RK4, impact model, session, HUD formatting and controls, menus, results maths |
+| `MTS.Visuals.Tests` | Rock appearance and visuals maths |
+| `MTS.SetupChecks.Tests` | That your checkout and Unity install are wired up (below) |
+
+### What the setup checks prove
+
+- **Unity version**: the editor running the tests is on the project's 2022.3 line (a different patch is reported in the test output).
+- **Packages**: Post Processing, Cinemachine, TextMesh Pro and uGUI resolve at the versions pinned in `Packages/manifest.json`, and the types the scenes use load.
+- **Build scenes**: Build Settings lists the six scenes in order (MainMenu 0, SpaceSimulation 1, AtmosphereReached 2, EarthCollision 3, VariableInput 4, MainMenu2 5), each one can be loaded by name, and each opens with no missing scripts.
+- **Scene links**: every scene name the code passes to `SceneManager.LoadScene`, and every scene name set on a button or stage component in the scenes, is a build scene.
+- **Simulation**: a realistic-mode (inbound entry) Chelyabinsk run through the shared `SimulationSession`, built the way the input screen builds it, goes Space → Atmosphere → Ended and produces a result with ground effects and a latitude/longitude.
+- **Geocoding key**: loading the optional key never throws; the test output says whether one was found.
+
+A setup-check failure on a fresh clone usually means a bad checkout (missing `.meta` files, wrong branch) or a package that did not download, rather than a code bug.
